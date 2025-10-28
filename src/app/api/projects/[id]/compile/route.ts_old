@@ -1,0 +1,222 @@
+// src/app/api/projects/[id]/compile/route.ts
+import { NextRequest, NextResponse } from 'next/server'
+import { requireAuth } from '@/lib/auth'
+import { prisma } from '@/lib/prisma'
+import { PDFDocument, rgb, PageSizes } from 'pdf-lib'
+import fs from 'fs/promises'
+import path from 'path'
+
+const UPLOADS_DIR = path.join(process.cwd(), 'public', 'uploads')
+
+export async function POST(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    console.log('📁 Compilação de documentos iniciada')
+    
+    const auth = await requireAuth(request)
+    if (!auth.success || !auth.user) {
+      return NextResponse.json({ error: auth.error }, { status: 401 })
+    }
+
+    const resolvedParams = await params
+    const projectId = parseInt(resolvedParams.id)
+
+    if (isNaN(projectId)) {
+      return NextResponse.json({
+        success: false,
+        error: 'ID do projeto inválido'
+      }, { status: 400 })
+    }
+
+    // Buscar projeto e documentos
+    const project = await prisma.project.findFirst({
+      where: {
+        id: projectId,
+        userId: auth.user.id
+      },
+      include: {
+        documents: {
+          where: {
+            status: { in: ['converted', 'ocr_completed'] },
+            pdfPath: { not: null }
+          },
+          orderBy: { documentNumber: 'asc' }
+        }
+      }
+    })
+
+    if (!project) {
+      return NextResponse.json({
+        success: false,
+        error: 'Projeto não encontrado'
+      }, { status: 404 })
+    }
+
+    if (project.documents.length === 0) {
+      return NextResponse.json({
+        success: false,
+        error: 'Nenhum documento convertido encontrado'
+      }, { status: 400 })
+    }
+
+    console.log(`📄 Compilando ${project.documents.length} documentos`)
+
+    // Criar PDF compilado
+    const compiledPdf = await PDFDocument.create()
+    
+    // Adicionar página de capa
+    const coverPage = compiledPdf.addPage(PageSizes.A4)
+    const { width, height } = coverPage.getSize()
+    
+    // Título
+    coverPage.drawText(project.name, {
+      x: 50,
+      y: height - 100,
+      size: 24,
+      color: rgb(0, 0, 0),
+    })
+    
+    // Informações do projeto
+    coverPage.drawText(`Cliente: ${project.client}`, {
+      x: 50,
+      y: height - 150,
+      size: 14,
+      color: rgb(0, 0, 0),
+    })
+    
+    coverPage.drawText(`Sistema: ${project.system}`, {
+      x: 50,
+      y: height - 180,
+      size: 14,
+      color: rgb(0, 0, 0),
+    })
+    
+    coverPage.drawText(`Tipo de Ação: ${project.actionType}`, {
+      x: 50,
+      y: height - 210,
+      size: 14,
+      color: rgb(0, 0, 0),
+    })
+    
+    coverPage.drawText(`Data de Compilação: ${new Date().toLocaleDateString('pt-BR')}`, {
+      x: 50,
+      y: height - 240,
+      size: 12,
+      color: rgb(0.5, 0.5, 0.5),
+    })
+
+    // Índice
+    coverPage.drawText('DOCUMENTOS ANEXADOS:', {
+      x: 50,
+      y: height - 300,
+      size: 16,
+      color: rgb(0, 0, 0),
+    })
+
+    let yPosition = height - 330
+    project.documents.forEach((doc, index) => {
+      coverPage.drawText(`${doc.documentNumber.toString().padStart(2, '0')}. ${doc.documentType} - ${doc.originalFilename}`, {
+        x: 70,
+        y: yPosition,
+        size: 10,
+        color: rgb(0, 0, 0),
+      })
+      yPosition -= 20
+    })
+
+    // Adicionar cada documento
+    for (const document of project.documents) {
+      try {
+        if (!document.pdfPath) continue
+
+        const pdfPath = path.join(UPLOADS_DIR, document.pdfPath)
+        const pdfBuffer = await fs.readFile(pdfPath)
+        const docPdf = await PDFDocument.load(pdfBuffer)
+        
+        // Adicionar página separadora
+        const separatorPage = compiledPdf.addPage(PageSizes.A4)
+        const { width: sepWidth, height: sepHeight } = separatorPage.getSize()
+        
+        separatorPage.drawText(`DOCUMENTO ${document.documentNumber.toString().padStart(2, '0')}`, {
+          x: 50,
+          y: sepHeight - 100,
+          size: 20,
+          color: rgb(0, 0, 0),
+        })
+        
+        separatorPage.drawText(document.documentType, {
+          x: 50,
+          y: sepHeight - 140,
+          size: 16,
+          color: rgb(0, 0, 0),
+        })
+        
+        separatorPage.drawText(document.originalFilename, {
+          x: 50,
+          y: sepHeight - 170,
+          size: 12,
+          color: rgb(0.5, 0.5, 0.5),
+        })
+
+        // Copiar páginas do documento
+        const pages = await compiledPdf.copyPages(docPdf, docPdf.getPageIndices())
+        pages.forEach((page) => compiledPdf.addPage(page))
+        
+        console.log(`✅ Documento ${document.documentNumber} adicionado`)
+        
+      } catch (error) {
+        console.error(`❌ Erro ao processar documento ${document.originalFilename}:`, error)
+        
+        // Adicionar página de erro
+        const errorPage = compiledPdf.addPage(PageSizes.A4)
+        const { width: errWidth, height: errHeight } = errorPage.getSize()
+        
+        errorPage.drawText('ERRO NO DOCUMENTO', {
+          x: 50,
+          y: errHeight - 100,
+          size: 20,
+          color: rgb(0.8, 0, 0),
+        })
+        
+        errorPage.drawText(`Arquivo: ${document.originalFilename}`, {
+          x: 50,
+          y: errHeight - 140,
+          size: 14,
+          color: rgb(0, 0, 0),
+        })
+        
+        errorPage.drawText('Este documento não pôde ser incluído na compilação.', {
+          x: 50,
+          y: errHeight - 170,
+          size: 12,
+          color: rgb(0.5, 0.5, 0.5),
+        })
+      }
+    }
+
+    // Gerar PDF final
+    const pdfBytes = await compiledPdf.save()
+    const pdfBuffer = Buffer.from(pdfBytes)
+    const filename = `${project.name.replace(/[^a-zA-Z0-9.-]/g, '_')}_COMPILADO.pdf`
+
+    console.log('✅ Compilação concluída! PDF gerado:', filename)
+
+    return new NextResponse(pdfBuffer, {
+      status: 200,
+      headers: {
+        'Content-Type': 'application/pdf',
+        'Content-Disposition': `attachment; filename="${filename}"`,
+        'Content-Length': pdfBuffer.length.toString(),
+      },
+    })
+
+  } catch (error) {
+    console.error('❌ Erro na compilação:', error)
+    return NextResponse.json({
+      success: false,
+      error: error instanceof Error ? error.message : 'Erro interno do servidor'
+    }, { status: 500 })
+  }
+}

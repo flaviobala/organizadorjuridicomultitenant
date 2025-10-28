@@ -1,0 +1,34 @@
+
+RELATÓRIO DE EXTRAÇÃO DE TEXTO
+===============================
+
+Arquivo: Processo Robério.pdf
+Tamanho: 19368.90 KB
+Data: 13/10/2025, 16:13:51
+
+MÉTODO 1: PDF-PARSE
+-------------------
+Caracteres: 0
+Tempo: 11 ms
+
+Texto extraído:
+
+
+MÉTODO 2: ELYSIUM
+-----------------
+Caracteres: 0
+Tempo: 560 ms
+
+Texto extraído:
+
+
+RECOMENDAÇÃO: both-similar
+
+EXTRAÇÃO HÍBRIDA (AUTOMÁTICA)
+------------------------------
+Método escolhido: fallback
+Confiança: low
+Caracteres: 0
+
+Texto extraído:
+

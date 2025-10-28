@@ -1,0 +1,244 @@
+// schema.prisma (Versão FINAL - Obrigatória)
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// =============================================
+// ENUMS E ORGANIZATION
+// =============================================
+enum UserRole {
+  admin
+  member
+}
+
+enum PlanType {
+  basic
+  pro
+  enterprise
+  trialing
+}
+
+enum SubscriptionStatus {
+  active
+  past_due
+  canceled
+  trialing
+}
+
+model Organization {
+  id                       Int                @id @default(autoincrement())
+  name                     String
+  planType                 PlanType           @default(trialing) @map("plan_type")
+  subscriptionStatus       SubscriptionStatus @default(trialing) @map("subscription_status")
+  documentProcessedCount   Int                @default(0) @map("document_processed_count")
+  aiTokenCount             Int                @default(0) @map("ai_token_count")
+  stripeCustomerId         String?            @unique @map("stripe_customer_id")
+
+  users          User[]
+  projects       Project[]
+  documents      Document[]
+  validations    DocumentValidation[]
+  apiUsages      ApiUsage[]
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("organizations")
+}
+
+// =============================================
+// TABELAS EXISTENTES ATUALIZADAS
+// =============================================
+
+model User {
+  id        Int      @id @default(autoincrement())
+  email     String   @unique
+  password  String
+  name      String
+  role      UserRole @default(member)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // ✅ COLUNA PARA LIGAR COM SUPABASE AUTH
+  authUserId String? @unique @db.Uuid @map("auth_user_id")
+
+  // ✅ ATUALIZAÇÃO (Obrigatório)
+  organizationId Int
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  projects  Project[]
+  documents Document[]
+  apiUsages ApiUsage[]
+
+  @@index([organizationId])
+  @@map("users")
+}
+
+model Project {
+  id                 Int      @id @default(autoincrement())
+  userId             Int      @map("user_id")
+  name               String
+  client             String
+  system             String
+  actionType         String   @map("action_type")
+  narrative          String?  @db.Text
+  processedNarrative String?  @db.Text @map("processed_narrative")
+  status             String   @default("draft")
+  createdAt          DateTime @default(now()) @map("created_at")
+  updatedAt          DateTime @updatedAt @map("updated_at")
+
+  // ✅ ATUALIZAÇÃO (Obrigatório)
+  organizationId Int
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  user        User                 @relation(fields: [userId], references: [id], onDelete: NoAction)
+  documents   Document[]
+  validations DocumentValidation[]
+
+  @@index([userId])
+  @@index([organizationId])
+  @@map("projects")
+}
+
+model Document {
+  id                   Int       @id @default(autoincrement())
+  projectId            Int       @map("project_id")
+  userId               Int       @map("user_id")
+  originalFilename     String    @map("original_filename")
+  storedFilename       String    @map("stored_filename")
+  smartFilename        String?   @map("smart_filename")
+  documentType         String    @map("document_type")
+  detectedDocumentType String?   @map("detected_document_type")
+  documentNumber       Int       @map("document_number")
+  mimeType             String    @map("mime_type")
+  originalSizeBytes    Int       @map("original_size_bytes")
+  isPersonalDocument   Boolean   @default(false) @map("is_personal_document")
+  isGrouped            Boolean   @default(false) @map("is_grouped")
+  groupedAt            DateTime? @map("grouped_at")
+  status               String    @default("uploaded")
+  pdfPath              String?   @map("pdf_path")
+  ocrText              String?   @db.Text @map("ocr_text")
+  pdfSizeBytes         Int?      @map("pdf_size_bytes")
+  pageCount            Int?      @map("page_count")
+  pageSize             String?   @map("page_size")
+  aiAnalysis           String?   @db.Text @map("ai_analysis")
+  analysisConfidence   Float?    @map("analysis_confidence")
+  createdAt            DateTime  @default(now()) @map("created_at")
+  updatedAt            DateTime  @updatedAt @map("updated_at")
+
+  // ✅ ATUALIZAÇÃO (Obrigatório)
+  organizationId Int
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  project     Project              @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user        User                 @relation(fields: [userId], references: [id], onDelete: NoAction)
+  validations DocumentValidation[]
+
+  @@index([projectId])
+  @@index([userId])
+  @@index([organizationId])
+  @@map("documents")
+}
+
+model DocumentValidation {
+  id             Int       @id @default(autoincrement())
+  projectId      Int       @map("project_id")
+  documentId     Int       @map("document_id")
+  isRelevant     Boolean   @map("is_relevant")
+  relevanceScore Float     @map("relevance_score")
+  aiAnalysis     String    @db.Text @map("ai_analysis")
+  suggestions    String?   @db.Text
+  status         String    @default("pending")
+  reviewedAt     DateTime? @map("reviewed_at")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+
+  // ✅ ATUALIZAÇÃO (Obrigatório)
+  organizationId Int
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  project  Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  document Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@unique([documentId])
+  @@index([projectId])
+  @@index([organizationId])
+  @@map("document_validations")
+}
+
+model ApiUsage {
+  id             Int      @id @default(autoincrement())
+  userId         Int      @map("user_id")
+  organizationId Int      @map("organization_id")
+  projectId      Int?     @map("project_id")
+  documentId     Int?     @map("document_id")
+
+  service        String   // 'openai', 'elysium'
+  operation      String   // 'categorization', 'validation', 'narrative', etc
+  model          String?  // 'gpt-4', 'gpt-3.5-turbo', etc
+  tokensInput    Int      @map("tokens_input")
+  tokensOutput   Int      @map("tokens_output")
+  tokensTotal    Int      @map("tokens_total")
+  costBRL        Float    @map("cost_brl")
+  method         String   // 'ai' or 'keywords'
+  success        Boolean  @default(true)
+  errorMessage   String?  @db.Text @map("error_message")
+
+  date           DateTime @default(now())
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([organizationId])
+  @@index([date])
+  @@index([service])
+  @@map("api_usage")
+}
+
+// =============================================
+// TABELAS GLOBAIS (permanecem iguais)
+// =============================================
+
+model SystemConfiguration {
+  id              Int      @id @default(autoincrement())
+  systemName      String   @unique @map("system_name")
+  maxFileSize     Int      @map("max_file_size")
+  maxPageSize     Int      @map("max_page_size")
+  allowedFormats  String   @map("allowed_formats")
+  pdfRequirements String   @db.Text @map("pdf_requirements")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  @@map("system_configurations")
+}
+
+model DocumentType {
+  id          Int     @id @default(autoincrement())
+  code        String  @unique
+  name        String
+  description String?
+  isRequired  Boolean @default(false) @map("is_required")
+  order       Int
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@map("document_types")
+}
+
+model ActionType {
+  id          Int      @id @default(autoincrement())
+  name        String   @unique
+  description String?
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@map("action_types")
+}
