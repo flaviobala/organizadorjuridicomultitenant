@@ -58,12 +58,16 @@ export async function POST(request: NextRequest) {
     // Definir frequência e preço
     const price = PLAN_PRICES[planType as keyof typeof PLAN_PRICES]
 
+    // ✅ PEGAR URL DO AMBIENTE
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://organizadorjuridicomultitenant.vercel.app/'
+
     console.log('📝 [MP] Criando assinatura:', {
       planType,
       price,
       organizationId: organization.id,
       organizationName: organization.name,
-      payerEmail: auth.user.email
+      payerEmail: auth.user.email,
+      baseUrl
     })
 
     // Criar assinatura
@@ -74,14 +78,10 @@ export async function POST(request: NextRequest) {
           frequency: 1,
           frequency_type: 'months',
           transaction_amount: price,
-          currency_id: 'BRL',
-          // Período de teste de 7 dias
-          free_trial: {
-            frequency: 7,
-            frequency_type: 'days'
-          }
+          currency_id: 'BRL'
         },
-        back_url: 'https://7b86a3d5ec26.ngrok-free.app/dashboard',
+        // ✅ USAR URL DINÂMICA DO AMBIENTE
+        back_url: `${baseUrl}/dashboard?payment=success&plan=${planType}`,
         payer_email: auth.user.email,
         // IMPORTANTE: usar external_reference para ligar ao organizationId
         external_reference: organization.id.toString()
@@ -89,6 +89,7 @@ export async function POST(request: NextRequest) {
     })
 
     console.log('✅ [MP] Assinatura criada:', subscription.id)
+    console.log('🔗 [MP] URL de checkout:', subscription.init_point)
 
     // Link de checkout
     const checkoutUrl = subscription.init_point
