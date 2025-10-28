@@ -3,12 +3,13 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 
+// VALORES DE TESTE - Mudar para valores reais em produção
 const PLANS = [
   {
     id: 'basic',
     name: 'Basic',
-    price: 'R$ 99',
-    period: '/mês',
+    price: 'R$ 1',
+    period: '/mês (TESTE)',
     paymentMethods: 'Pix, Boleto ou Cartão',
     features: [
       '500 documentos/mês',
@@ -24,8 +25,8 @@ const PLANS = [
   {
     id: 'pro',
     name: 'Pro',
-    price: 'R$ 299',
-    period: '/mês',
+    price: 'R$ 2',
+    period: '/mês (TESTE)',
     paymentMethods: 'Pix, Boleto ou Cartão',
     features: [
       '5.000 documentos/mês',
@@ -41,8 +42,8 @@ const PLANS = [
   {
     id: 'enterprise',
     name: 'Enterprise',
-    price: 'R$ 999',
-    period: '/mês',
+    price: 'R$ 3',
+    period: '/mês (TESTE)',
     paymentMethods: 'Pix, Boleto ou Cartão',
     features: [
       'Documentos ilimitados',

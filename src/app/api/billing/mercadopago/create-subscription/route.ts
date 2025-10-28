@@ -14,11 +14,11 @@ const client = new MercadoPagoConfig({
 
 const preApprovalClient = new PreApproval(client)
 
-// Definir preços dos planos (em reais)
+// Definir preços dos planos (em reais) - VALORES DE TESTE
 const PLAN_PRICES = {
-  basic: 99.00,
-  pro: 299.00,
-  enterprise: 999.00
+  basic: 1.00,      // R$ 1,00 para teste
+  pro: 2.00,        // R$ 2,00 para teste
+  enterprise: 3.00  // R$ 3,00 para teste
 }
 
 /**
