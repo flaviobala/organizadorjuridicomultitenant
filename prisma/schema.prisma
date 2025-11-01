@@ -32,13 +32,14 @@ enum SubscriptionStatus {
 }
 
 model Organization {
-  id                       Int                @id @default(autoincrement())
-  name                     String
-  planType                 PlanType           @default(trialing) @map("plan_type")
-  subscriptionStatus       SubscriptionStatus @default(trialing) @map("subscription_status")
-  documentProcessedCount   Int                @default(0) @map("document_processed_count")
-  aiTokenCount             Int                @default(0) @map("ai_token_count")
-  stripeCustomerId         String?            @unique @map("stripe_customer_id")
+  id                         Int                @id @default(autoincrement())
+  name                       String
+  planType                   PlanType           @default(trialing) @map("plan_type")
+  subscriptionStatus         SubscriptionStatus @default(trialing) @map("subscription_status")
+  documentProcessedCount     Int                @default(0) @map("document_processed_count")
+  aiTokenCount               Int                @default(0) @map("ai_token_count")
+  stripeCustomerId           String?            @unique @map("stripe_customer_id")
+  mercadoPagoSubscriptionId  String?            @unique @map("mercadopago_subscription_id")
 
   users          User[]
   projects       Project[]
