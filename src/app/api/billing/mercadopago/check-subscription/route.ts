@@ -1,0 +1,153 @@
+// src/app/api/billing/mercadopago/check-subscription/route.ts
+import { NextRequest, NextResponse } from 'next/server'
+import { requireAuth } from '@/lib/auth'
+import { prisma } from '@/lib/prisma'
+
+/**
+ * POST /api/billing/mercadopago/check-subscription
+ * Verifica status da assinatura no MercadoPago e atualiza banco
+ */
+export async function POST(request: NextRequest) {
+  try {
+    console.log('🔍 [CHECK SUBSCRIPTION] Iniciando verificação...')
+
+    // 1. Autenticar usuário
+    const auth = await requireAuth(request)
+    if (!auth.success || !auth.user) {
+      console.error('❌ [CHECK SUBSCRIPTION] Erro de autenticação:', auth.error)
+      return NextResponse.json({
+        success: false,
+        error: auth.error || 'Não autenticado'
+      }, { status: 401 })
+    }
+
+    console.log('✅ [CHECK SUBSCRIPTION] Usuário autenticado:', auth.user.email)
+
+    // 2. Obter subscriptionId do body
+    const body = await request.json()
+    const { subscriptionId } = body
+
+    if (!subscriptionId) {
+      console.error('❌ [CHECK SUBSCRIPTION] subscriptionId não fornecido')
+      return NextResponse.json({
+        success: false,
+        error: 'ID da assinatura não fornecido'
+      }, { status: 400 })
+    }
+
+    console.log('📋 [CHECK SUBSCRIPTION] SubscriptionId:', subscriptionId)
+
+    // 3. Buscar status real da assinatura no MercadoPago
+    const accessToken = process.env.MERCADOPAGO_ACCESS_TOKEN
+    if (!accessToken) {
+      console.error('❌ [CHECK SUBSCRIPTION] MERCADOPAGO_ACCESS_TOKEN não configurado')
+      return NextResponse.json({
+        success: false,
+        error: 'Erro de configuração do servidor'
+      }, { status: 500 })
+    }
+
+    console.log('🔗 [CHECK SUBSCRIPTION] Buscando status no MercadoPago...')
+
+    const mpResponse = await fetch(`https://api.mercadopago.com/preapproval/${subscriptionId}`, {
+      headers: {
+        'Authorization': `Bearer ${accessToken}`
+      }
+    })
+
+    if (!mpResponse.ok) {
+      console.error(`❌ [CHECK SUBSCRIPTION] Erro ao buscar assinatura no MP: ${mpResponse.status}`)
+      const errorText = await mpResponse.text()
+      console.error('Erro do MP:', errorText)
+      return NextResponse.json({
+        success: false,
+        error: 'Erro ao verificar status do pagamento no MercadoPago'
+      }, { status: 500 })
+    }
+
+    const subscription = await mpResponse.json()
+
+    console.log(`📊 [CHECK SUBSCRIPTION] Status da assinatura no MP: ${subscription.status}`)
+    console.log(`📊 [CHECK SUBSCRIPTION] Dados completos:`, JSON.stringify(subscription, null, 2))
+
+    // 4. Verificar se foi autorizada/aprovada
+    if (subscription.status !== 'authorized') {
+      console.warn(`⚠️ [CHECK SUBSCRIPTION] Assinatura não autorizada ainda: ${subscription.status}`)
+      return NextResponse.json({
+        success: false,
+        error: `Pagamento ainda não foi aprovado. Status atual: ${subscription.status}. Por favor, aguarde alguns minutos e tente novamente.`,
+        status: subscription.status
+      }, { status: 400 })
+    }
+
+    // 5. Mapear plano baseado no valor (auto_recurring.transaction_amount)
+    const amount = subscription.auto_recurring?.transaction_amount || 0
+
+    let planType = 'basic' // padrão
+    let planName = 'Basic'
+
+    if (amount >= 190) {
+      planType = 'enterprise'
+      planName = 'Enterprise'
+    } else if (amount >= 90) {
+      planType = 'pro'
+      planName = 'Pro'
+    } else if (amount >= 40) {
+      planType = 'basic'
+      planName = 'Basic'
+    } else if (amount >= 3) {
+      // Para testes (R$ 5 = Pro, R$ 3 = Enterprise, R$ 2 = Basic)
+      if (amount >= 4.5) {
+        planType = 'pro'
+        planName = 'Pro'
+      } else if (amount >= 2.5) {
+        planType = 'enterprise'
+        planName = 'Enterprise'
+      } else {
+        planType = 'basic'
+        planName = 'Basic'
+      }
+    }
+
+    console.log(`📦 [CHECK SUBSCRIPTION] Plano identificado: ${planName} (R$ ${amount})`)
+
+    // 6. Atualizar organização no banco de dados
+    const organizationId = auth.user.organizationId
+
+    console.log(`💾 [CHECK SUBSCRIPTION] Atualizando organização ${organizationId}...`)
+
+    await prisma.organization.update({
+      where: { id: organizationId },
+      data: {
+        planType: planType as any,
+        subscriptionStatus: 'active',
+        mercadoPagoSubscriptionId: subscriptionId,
+        documentProcessedCount: 0, // Resetar contadores ao ativar novo plano
+        aiTokenCount: 0,
+        updatedAt: new Date()
+      }
+    })
+
+    console.log(`✅ [CHECK SUBSCRIPTION] Organização ${organizationId} atualizada com sucesso!`)
+    console.log(`   - Plano: ${planType}`)
+    console.log(`   - Status: active`)
+    console.log(`   - SubscriptionId: ${subscriptionId}`)
+
+    return NextResponse.json({
+      success: true,
+      message: 'Assinatura ativada com sucesso',
+      planName: planName,
+      planType: planType,
+      subscriptionStatus: 'active'
+    })
+
+  } catch (error) {
+    console.error('❌ [CHECK SUBSCRIPTION] Erro ao processar:', error)
+    console.error('Stack:', error instanceof Error ? error.stack : 'N/A')
+
+    return NextResponse.json({
+      success: false,
+      error: error instanceof Error ? error.message : 'Erro interno do servidor'
+    }, { status: 500 })
+  }
+}
