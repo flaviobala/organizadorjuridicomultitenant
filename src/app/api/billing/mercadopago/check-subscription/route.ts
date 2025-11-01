@@ -105,8 +105,30 @@ export async function POST(request: NextRequest) {
 
     console.log(`📦 [CHECK SUBSCRIPTION] Plano identificado: ${planName} (R$ ${amount})`)
 
-    // 6. Atualizar organização no banco de dados
+    // 6. Verificar se já foi processado antes (evitar duplicação)
     const organizationId = auth.user.organizationId
+
+    const currentOrg = await prisma.organization.findUnique({
+      where: { id: organizationId },
+      select: {
+        mercadoPagoSubscriptionId: true,
+        subscriptionStatus: true,
+        planType: true
+      }
+    })
+
+    if (currentOrg?.mercadoPagoSubscriptionId === subscriptionId &&
+        currentOrg?.subscriptionStatus === 'active') {
+      console.log(`✅ [CHECK SUBSCRIPTION] Assinatura já processada anteriormente`)
+      return NextResponse.json({
+        success: true,
+        message: 'Assinatura já estava ativada',
+        planName: currentOrg.planType.charAt(0).toUpperCase() + currentOrg.planType.slice(1),
+        planType: currentOrg.planType,
+        subscriptionStatus: 'active',
+        alreadyProcessed: true
+      })
+    }
 
     console.log(`💾 [CHECK SUBSCRIPTION] Atualizando organização ${organizationId}...`)
 
@@ -116,7 +138,7 @@ export async function POST(request: NextRequest) {
         planType: planType as any,
         subscriptionStatus: 'active',
         mercadoPagoSubscriptionId: subscriptionId,
-        documentProcessedCount: 0, // Resetar contadores ao ativar novo plano
+        documentProcessedCount: 0, // Resetar contadores APENAS na primeira ativação
         aiTokenCount: 0,
         updatedAt: new Date()
       }
