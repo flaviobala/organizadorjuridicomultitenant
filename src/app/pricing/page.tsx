@@ -3,13 +3,13 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 
-// VALORES DE TESTE - Mudar para valores reais em produção
+// VALORES DE PRODUÇÃO
 const PLANS = [
   {
     id: 'basic',
     name: 'Basic',
-    price: 'R$ 1',
-    period: '/mês (TESTE)',
+    price: 'R$ 5,00',
+    period: '/mês',
     paymentMethods: 'Pix, Boleto ou Cartão',
     features: [
       '500 documentos/mês',
@@ -25,8 +25,8 @@ const PLANS = [
   {
     id: 'pro',
     name: 'Pro',
-    price: 'R$ 2',
-    period: '/mês (TESTE)',
+    price: 'R$ 3,00',
+    period: '/mês',
     paymentMethods: 'Pix, Boleto ou Cartão',
     features: [
       '5.000 documentos/mês',
@@ -42,8 +42,8 @@ const PLANS = [
   {
     id: 'enterprise',
     name: 'Enterprise',
-    price: 'R$ 3',
-    period: '/mês (TESTE)',
+    price: 'R$ 199,90',
+    period: '/mês',
     paymentMethods: 'Pix, Boleto ou Cartão',
     features: [
       'Documentos ilimitados',
@@ -104,6 +104,12 @@ export default function PricingPage() {
 
       // Redirecionar para checkout do Mercado Pago
       if (data.checkoutUrl) {
+        // Salvar dados do pagamento no localStorage para processar depois
+        localStorage.setItem('pending_payment', JSON.stringify({
+          plan: planId,
+          subscriptionId: data.subscriptionId,
+          timestamp: Date.now()
+        }))
         window.location.href = data.checkoutUrl
       }
     } catch (error) {
@@ -125,6 +131,34 @@ export default function PricingPage() {
           <p className="text-xl text-gray-600">
             Gerencie documentos jurídicos com inteligência artificial
           </p>
+        </div>
+
+        {/* Instruções importantes */}
+        <div className="mb-8 bg-blue-50 border-2 border-blue-200 rounded-lg p-6 shadow-sm">
+          <div className="flex items-start">
+            <svg className="w-6 h-6 text-blue-600 mr-3 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+              <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+            </svg>
+            <div className="flex-1">
+              <h3 className="text-lg font-semibold text-blue-900 mb-2">
+                Instruções para Ativar sua Assinatura
+              </h3>
+              <ol className="text-sm text-blue-800 space-y-2 list-decimal list-inside">
+                <li>Clique em "Assinar agora" no plano desejado</li>
+                <li>Complete o pagamento no MercadoPago (Pix, Boleto ou Cartão)</li>
+                <li>Após a aprovação, copie e acesse manualmente esta URL:</li>
+              </ol>
+              <div className="mt-3 bg-white border border-blue-300 rounded p-3">
+                <code className="text-sm text-blue-900 break-all">
+                  /confirmar-pagamento
+                </code>
+              </div>
+              <p className="text-sm text-blue-700 mt-3">
+                <strong>Importante:</strong> Devido a uma limitação do MercadoPago, o redirect automático não funciona para assinaturas.
+                Você precisará acessar a URL acima manualmente após concluir o pagamento.
+              </p>
+            </div>
+          </div>
         </div>
 
         {/* Plans Grid */}

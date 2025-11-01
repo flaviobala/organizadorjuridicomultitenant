@@ -1,15 +1,10 @@
 {
   "permissions": {
     "allow": [
-      "Bash(set \"PRISMA_USER_CONSENT_FOR_DANGEROUS_AI_ACTION=sim\")",
-      "Bash(npx prisma migrate:*)",
-      "Bash(npx prisma generate)",
-      "Bash(psql:*)",
-      "Bash(npx prisma db push:*)",
-      "Bash(npm install:*)",
-      "Bash(netstat:*)",
-      "Bash(findstr:*)",
-      "Read(//c/Users/flavi/**)"
+      "Bash(node -e:*)",
+      "Bash(curl:*)",
+      "Bash(npx prisma studio --port 5556)",
+      "Bash(node:*)"
     ],
     "deny": [],
     "ask": []

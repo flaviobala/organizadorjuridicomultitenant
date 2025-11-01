@@ -17,6 +17,7 @@ import {
 } from 'lucide-react'
 import TokenUsageCard from '@/components/TokenUsageCard'
 import TokenUsageBadge from '@/components/TokenUsageBadge'
+import SubscriptionCard from '@/components/SubscriptionCard'
 
 interface Project {
   id: number
@@ -58,6 +59,32 @@ export default function DashboardPage() {
 
     setUser(JSON.parse(userData))
     loadProjects()
+
+    // Verificar se voltou do pagamento
+    const urlParams = new URLSearchParams(window.location.search)
+    if (urlParams.get('payment') === 'success') {
+      const plan = urlParams.get('plan')
+      const subscriptionId = urlParams.get('subscriptionId')
+
+      setSuccessMessage(`✅ Assinatura do plano ${plan?.toUpperCase()} realizada com sucesso! Atualizando...`)
+
+      // Atualizar banco via API
+      fetch(`/api/billing/mercadopago/process-return?organizationId=${subscriptionId}&plan=${plan}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      }).then(() => {
+        // Redirecionar após processar
+        setTimeout(() => {
+          window.location.href = '/dashboard'
+        }, 2000)
+      }).catch(err => {
+        console.error('Erro ao processar retorno:', err)
+        setTimeout(() => {
+          window.location.href = '/dashboard'
+        }, 2000)
+      })
+    }
   }, [router])
 
   const loadProjects = async () => {
@@ -233,8 +260,9 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* Token Usage Card */}
+        {/* Subscription and Token Usage Cards */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+          <SubscriptionCard />
           <TokenUsageCard />
         </div>
 

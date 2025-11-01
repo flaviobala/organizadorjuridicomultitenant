@@ -196,18 +196,48 @@ async function handleSubscriptionPayment(data: any, action: string) {
 
     console.log(`💳 [PAGAMENTO] Processando pagamento: ${paymentId} - Ação: ${action}`)
 
-    // Buscar detalhes do pagamento via API
-    const paymentDetails = await fetchPaymentDetails(paymentId)
+    // Tentar buscar como pagamento primeiro
+    let paymentDetails = await fetchPaymentDetails(paymentId)
+    let organizationId: number | null = null
 
+    // Se não encontrou como payment, pode ser que o ID seja de preapproval
     if (!paymentDetails) {
-      console.error('❌ [PAGAMENTO] Não foi possível buscar detalhes')
-      return
+      console.log(`⚠️ [PAGAMENTO] ID ${paymentId} não é um payment, tentando buscar como preapproval...`)
+
+      // Buscar como assinatura
+      const subscription = await fetchSubscriptionDetails(paymentId)
+
+      if (subscription && subscription.external_reference) {
+        organizationId = parseInt(subscription.external_reference)
+
+        // Para assinaturas, considerar como ativo se status for 'authorized'
+        if (subscription.status === 'authorized') {
+          console.log(`✅ [PAGAMENTO] Assinatura ${paymentId} está autorizada - Org ${organizationId}`)
+
+          await prisma.organization.update({
+            where: { id: organizationId },
+            data: {
+              subscriptionStatus: 'active',
+              documentProcessedCount: 0,
+              aiTokenCount: 0,
+              updatedAt: new Date()
+            }
+          })
+
+          console.log(`🔄 [PAGAMENTO] Contadores resetados para Org ${organizationId}`)
+          return
+        }
+      } else {
+        console.error('❌ [PAGAMENTO] Não foi possível buscar detalhes como payment ou preapproval')
+        return
+      }
     }
 
+    // Se chegou aqui, encontrou como payment
     const { status, external_reference, preapproval_id } = paymentDetails
 
     // external_reference ou buscar via preapproval_id
-    let organizationId = external_reference ? parseInt(external_reference) : null
+    organizationId = external_reference ? parseInt(external_reference) : null
 
     if (!organizationId && preapproval_id) {
       // Buscar organization via assinatura

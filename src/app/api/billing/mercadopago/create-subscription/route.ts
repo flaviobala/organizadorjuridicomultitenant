@@ -14,11 +14,11 @@ const client = new MercadoPagoConfig({
 
 const preApprovalClient = new PreApproval(client)
 
-// Definir preços dos planos (em reais) - VALORES DE TESTE
+// Definir preços dos planos (em reais) - VALORES DE PRODUÇÃO
 const PLAN_PRICES = {
-  basic: 1.00,      // R$ 1,00 para teste
-  pro: 2.00,        // R$ 2,00 para teste
-  enterprise: 3.00  // R$ 3,00 para teste
+  basic: 5.00,         // R$ 49,90/mês
+  pro: 5.90,           // R$ 99,90/mês
+  enterprise: 199.90   // R$ 199,90/mês
 }
 
 /**
@@ -59,14 +59,17 @@ export async function POST(request: NextRequest) {
     const price = PLAN_PRICES[planType as keyof typeof PLAN_PRICES]
 
     // ✅ PEGAR URL DO AMBIENTE
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://organizadorjuridicomultitenant.vercel.app/'
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
+
+    // ✅ PRODUÇÃO: Usar email real do usuário logado
+    const payerEmail = auth.user.email
 
     console.log('📝 [MP] Criando assinatura:', {
       planType,
       price,
       organizationId: organization.id,
       organizationName: organization.name,
-      payerEmail: auth.user.email,
+      payerEmail,
       baseUrl
     })
 
@@ -80,10 +83,8 @@ export async function POST(request: NextRequest) {
           transaction_amount: price,
           currency_id: 'BRL'
         },
-        // ✅ USAR URL DINÂMICA DO AMBIENTE
-        back_url: `${baseUrl}/dashboard?payment=success&plan=${planType}`,
-        payer_email: auth.user.email,
-        // IMPORTANTE: usar external_reference para ligar ao organizationId
+        back_url: `${baseUrl}/payment-success`,
+        payer_email: payerEmail,
         external_reference: organization.id.toString()
       }
     })
