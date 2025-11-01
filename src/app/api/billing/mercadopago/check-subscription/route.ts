@@ -86,27 +86,21 @@ export async function POST(request: NextRequest) {
     let planType = 'basic' // padrão
     let planName = 'Basic'
 
-    if (amount >= 190) {
+    // Mapear baseado nos preços: Basic=R$5, Pro=R$3, Enterprise=R$199.90
+    if (amount >= 199) {
       planType = 'enterprise'
       planName = 'Enterprise'
-    } else if (amount >= 90) {
-      planType = 'pro'
-      planName = 'Pro'
-    } else if (amount >= 40) {
+    } else if (amount >= 4.5) {
+      // R$ 5.00 = Basic
       planType = 'basic'
       planName = 'Basic'
-    } else if (amount >= 3) {
-      // Para testes (R$ 5 = Pro, R$ 3 = Enterprise, R$ 2 = Basic)
-      if (amount >= 4.5) {
-        planType = 'pro'
-        planName = 'Pro'
-      } else if (amount >= 2.5) {
-        planType = 'enterprise'
-        planName = 'Enterprise'
-      } else {
-        planType = 'basic'
-        planName = 'Basic'
-      }
+    } else if (amount >= 2.5) {
+      // R$ 3.00 = Pro
+      planType = 'pro'
+      planName = 'Pro'
+    } else {
+      planType = 'basic'
+      planName = 'Basic'
     }
 
     console.log(`📦 [CHECK SUBSCRIPTION] Plano identificado: ${planName} (R$ ${amount})`)
