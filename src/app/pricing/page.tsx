@@ -8,7 +8,7 @@ const PLANS = [
   {
     id: 'basic',
     name: 'Basic',
-    price: 'R$ 5,00',
+    price: 'R$ 15,00',
     period: '/mês',
     paymentMethods: 'Pix, Boleto ou Cartão',
     features: [
@@ -24,7 +24,7 @@ const PLANS = [
   {
     id: 'pro',
     name: 'Pro',
-    price: 'R$ 6,00',
+    price: 'R$ 20,00',
     period: '/mês',
     paymentMethods: 'Pix, Boleto ou Cartão',
     features: [
