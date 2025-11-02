@@ -224,7 +224,7 @@ export async function requireAuth(request: Request): Promise<{
   }
 }
 
-// Middleware de autenticação para Admin (Super Admin)
+// Middleware de autenticação para Admin da Organização
 export async function requireAdmin(request: Request): Promise<{
   success: boolean,
   user?: { id: number, email: string, name: string, organizationId: number, role: string },
@@ -236,11 +236,34 @@ export async function requireAdmin(request: Request): Promise<{
     return auth
   }
 
-  // Verificar se é admin
-  if (auth.user.role !== 'admin') {
+  // Verificar se é admin (da organização) ou super_admin
+  if (auth.user.role !== 'admin' && auth.user.role !== 'super_admin') {
     return {
       success: false,
       error: 'Acesso negado: apenas administradores'
+    }
+  }
+
+  return auth
+}
+
+// Middleware de autenticação para SUPER ADMIN (Dono do Sistema)
+export async function requireSuperAdmin(request: Request): Promise<{
+  success: boolean,
+  user?: { id: number, email: string, name: string, organizationId: number, role: string },
+  error?: string
+}> {
+  const auth = await requireAuth(request)
+
+  if (!auth.success || !auth.user) {
+    return auth
+  }
+
+  // Verificar se é SUPER ADMIN
+  if (auth.user.role !== 'super_admin') {
+    return {
+      success: false,
+      error: 'Acesso negado: apenas super administradores do sistema'
     }
   }
 

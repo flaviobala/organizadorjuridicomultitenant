@@ -54,11 +54,11 @@ export async function middleware(request: NextRequest) {
     const secret = new TextEncoder().encode(JWT_SECRET)
     const { payload } = await jwtVerify(token, secret)
 
-    // Verificar se é rota admin API
+    // Verificar se é rota admin API (SUPER ADMIN apenas)
     if (pathname.startsWith('/api/admin')) {
-      if (payload.role !== 'admin') {
+      if (payload.role !== 'super_admin') {
         return NextResponse.json(
-          { error: 'Acesso negado: apenas administradores' },
+          { error: 'Acesso negado: apenas super administradores do sistema' },
           { status: 403 }
         )
       }

@@ -1,6 +1,6 @@
 // src/app/api/admin/organizations/route.ts
 import { NextRequest, NextResponse } from 'next/server'
-import { requireAdmin } from '@/lib/auth'
+import { requireSuperAdmin } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import bcrypt from 'bcryptjs'
 
@@ -10,7 +10,7 @@ import bcrypt from 'bcryptjs'
  */
 export async function POST(request: NextRequest) {
   try {
-    const auth = await requireAdmin(request)
+    const auth = await requireSuperAdmin(request)
     if (!auth.success || !auth.user) {
       return NextResponse.json({ error: auth.error }, { status: 403 })
     }
@@ -93,12 +93,12 @@ export async function POST(request: NextRequest) {
  */
 export async function GET(request: NextRequest) {
   try {
-    const auth = await requireAdmin(request)
+    const auth = await requireSuperAdmin(request)
     if (!auth.success || !auth.user) {
       return NextResponse.json({ error: auth.error }, { status: 403 })
     }
 
-    // Buscar todas as organizações com estatísticas
+    // Buscar todas as organizações com estatísticas E usuários
     const organizations = await prisma.organization.findMany({
       include: {
         _count: {
@@ -106,6 +106,18 @@ export async function GET(request: NextRequest) {
             users: true,
             projects: true,
             documents: true,
+          }
+        },
+        users: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            role: true,
+            createdAt: true
+          },
+          orderBy: {
+            role: 'asc' // admin primeiro, depois member
           }
         }
       },
@@ -127,7 +139,8 @@ export async function GET(request: NextRequest) {
         usersCount: org._count.users,
         projectsCount: org._count.projects,
         documentsCount: org._count.documents,
-      }
+      },
+      users: org.users // ✅ Adicionar lista de usuários
     }))
 
     return NextResponse.json({

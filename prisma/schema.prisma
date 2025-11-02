@@ -13,8 +13,9 @@ datasource db {
 // ENUMS E ORGANIZATION
 // =============================================
 enum UserRole {
-  admin
-  member
+  super_admin  // Dono do sistema - acessa /admin (todas organizações)
+  admin        // Admin da organização - gerencia usuários do escritório
+  member       // Membro da organização - usuário comum
 }
 
 enum PlanType {

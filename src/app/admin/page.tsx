@@ -18,6 +18,12 @@ interface Organization {
     projectsCount: number
     documentsCount: number
   }
+  users?: Array<{
+    id: number
+    name: string
+    email: string
+    role: string
+  }>
 }
 
 export default function AdminDashboard() {
@@ -25,6 +31,7 @@ export default function AdminDashboard() {
   const [organizations, setOrganizations] = useState<Organization[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [expandedOrgs, setExpandedOrgs] = useState<Set<number>>(new Set())
 
   useEffect(() => {
     // Verificar se está logado
@@ -37,8 +44,8 @@ export default function AdminDashboard() {
     // Verificar role (decodificar JWT básico)
     try {
       const payload = JSON.parse(atob(token.split('.')[1]))
-      if (payload.role !== 'admin') {
-        setError('Acesso negado: você não tem permissão de administrador')
+      if (payload.role !== 'super_admin') {
+        setError('Acesso negado: você não tem permissão de super administrador')
         setLoading(false)
         return
       }
@@ -101,6 +108,22 @@ export default function AdminDashboard() {
       canceled: 'bg-gray-100 text-gray-800',
     }
     return colors[status] || 'bg-gray-100 text-gray-800'
+  }
+
+  const toggleOrg = (orgId: number) => {
+    const newExpanded = new Set(expandedOrgs)
+    if (newExpanded.has(orgId)) {
+      newExpanded.delete(orgId)
+    } else {
+      newExpanded.add(orgId)
+    }
+    setExpandedOrgs(newExpanded)
+  }
+
+  const getRoleIcon = (role: string) => {
+    if (role === 'super_admin') return '👑'
+    if (role === 'admin') return '🔑'
+    return '👤'
   }
 
   if (loading) {
