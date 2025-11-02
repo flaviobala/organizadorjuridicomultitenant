@@ -3,12 +3,12 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 
-// VALORES DE PRODUÇÃO
+// VALORES DE TESTE
 const PLANS = [
   {
     id: 'basic',
     name: 'Basic',
-    price: 'R$ 5,00',
+    price: 'R$ 2,00',
     period: '/mês',
     paymentMethods: 'Pix, Boleto ou Cartão',
     features: [
