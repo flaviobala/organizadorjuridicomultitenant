@@ -16,8 +16,8 @@ const preApprovalClient = new PreApproval(client)
 
 // Definir preços dos planos (em reais) - VALORES DE TESTE
 const PLAN_PRICES = {
-  basic: 2.00,         // R$ 2,00/mês (teste)
-  pro: 3.00,           // R$ 3,00/mês (teste)
+  basic: 5.00,         // R$ 5,00/mês (teste)
+  pro: 6.00,           // R$ 6,00/mês (teste)
   enterprise: 199.90   // R$ 199,90/mês
 }
 
