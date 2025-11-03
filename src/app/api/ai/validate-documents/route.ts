@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { requireAuth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { OpenAIService } from '@/lib/openai' // Assumindo que esta classe não acessa o 'prisma'
+import { incrementTokenCount } from '@/lib/plan-limits'
 import { z } from 'zod'
 
 const validateDocumentsSchema = z.object({
@@ -77,6 +78,7 @@ export async function POST(request: NextRequest) {
 
     const openaiService = new OpenAIService()
     const validationResults = []
+    let totalTokensUsed = 0
 
     // O loop 'for (const document of project.documents)' é seguro,
     // pois 'project.documents' já foi filtrado pelo organizationId.
@@ -91,6 +93,9 @@ export async function POST(request: NextRequest) {
         document.documentType,
         project.actionType
       )
+
+      // Acumular tokens utilizados
+      totalTokensUsed += validation.tokensUsed
 
       // ✅ ALTERAÇÃO MULTI-TENANT (Injeção Obrigatória)
       // Injetamos o 'organizationId' no 'create' do 'upsert'.
@@ -139,6 +144,9 @@ export async function POST(request: NextRequest) {
       project.actionType
     )
 
+    // Acumular tokens da análise de inconsistências
+    totalTokensUsed += inconsistencyAnalysis.tokensUsed
+
 
     // Atualizar status do projeto
     // Esta operação é segura, pois 'projectId' foi validado acima
@@ -149,6 +157,12 @@ export async function POST(request: NextRequest) {
       where: { id: projectId },
       data: { status: newStatus }
     })
+
+    // ✅ Incrementar contagem de tokens da organização
+    if (totalTokensUsed > 0) {
+      await incrementTokenCount(auth.user.organizationId, totalTokensUsed)
+      console.log(`📊 ${totalTokensUsed} tokens contabilizados para organização ${auth.user.organizationId}`)
+    }
 
     console.log('✅ Validação de documentos concluída')
 
@@ -170,7 +184,8 @@ export async function POST(request: NextRequest) {
         validationResults,
         inconsistencies: inconsistencyAnalysis.inconsistencies,
         recommendations: inconsistencyAnalysis.recommendations,
-        statistics: stats
+        statistics: stats,
+        tokensUsed: totalTokensUsed
       }
     })
 

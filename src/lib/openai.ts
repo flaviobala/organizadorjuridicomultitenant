@@ -88,15 +88,20 @@ Responda APENAS com a narrativa processada, sem comentários adicionais.`
         throw new Error('Resposta vazia da OpenAI')
       }
 
+      // Capturar uso de tokens
+      const tokensUsed = completion.usage?.total_tokens || 0
+      console.log(`🤖 Tokens utilizados: ${tokensUsed}`)
+
       // Gerar sugestões adicionais
-      const suggestions = await this.generateSuggestions(processedNarrative, actionType)
+      const suggestionResult = await this.generateSuggestions(processedNarrative, actionType)
 
       console.log('✅ Narrativa processada com sucesso')
 
       return {
         success: true,
         processedNarrative,
-        suggestions
+        suggestions: suggestionResult.suggestions,
+        tokensUsed: tokensUsed + (suggestionResult.tokensUsed || 0)
       }
 
     } catch (error) {
@@ -242,7 +247,7 @@ Responda em JSON:
   /**
    * Gera sugestões para fortalecer o caso
    */
-  private async generateSuggestions(processedNarrative: string, actionType: string): Promise<string[]> {
+  private async generateSuggestions(processedNarrative: string, actionType: string): Promise<{ suggestions: string[], tokensUsed: number }> {
     try {
       const prompt = `
 Baseado na narrativa processada abaixo, liste 3-5 sugestões práticas para fortalecer juridicamente esta ${actionType}:
@@ -270,14 +275,17 @@ SUGESTÕES (uma por linha, sem numeração):
       );
 
       const suggestionsText = completion.choices[0]?.message?.content?.trim()
-      
-      return suggestionsText 
+      const tokensUsed = completion.usage?.total_tokens || 0
+
+      const suggestions = suggestionsText
         ? suggestionsText.split('\n').filter(s => s.trim().length > 10).slice(0, 5)
         : []
 
+      return { suggestions, tokensUsed }
+
     } catch (error) {
       console.warn('Erro ao gerar sugestões:', error)
-      return []
+      return { suggestions: [], tokensUsed: 0 }
     }
   }
 
@@ -386,7 +394,7 @@ SUGESTÕES (uma por linha, sem numeração):
     documentText: string,
     documentType: string | null,
     actionType: string
-  ): Promise<{ relevant: boolean; confidence: number; reasoning: string }> {
+  ): Promise<{ relevant: boolean; confidence: number; reasoning: string; tokensUsed: number }> {
     try {
       // ✅ CORREÇÃO INTELIGENTE: Identificar documentos pessoais para análise especial
       const personalDocumentTypes = [
@@ -503,17 +511,20 @@ Responda APENAS no formato JSON:
         .trim()
 
       const result = JSON.parse(cleanedContent)
+      const tokensUsed = response.usage?.total_tokens || 0
 
       console.log(`📊 Resultado da validação (${documentType}):`, {
         relevante: result.relevant,
         confiança: `${(result.confidence * 100).toFixed(0)}%`,
-        raciocínio: result.reasoning?.substring(0, 100) + '...'
+        raciocínio: result.reasoning?.substring(0, 100) + '...',
+        tokens: tokensUsed
       })
 
       return {
         relevant: Boolean(result.relevant),
         confidence: Number(result.confidence) || 0.5,
-        reasoning: String(result.reasoning) || 'Sem explicação disponível'
+        reasoning: String(result.reasoning) || 'Sem explicação disponível',
+        tokensUsed
       }
 
     } catch (error) {
@@ -521,7 +532,8 @@ Responda APENAS no formato JSON:
       return {
         relevant: true, // Por segurança, assume que é relevante se houver erro
         confidence: 0.5,
-        reasoning: 'Erro na validação - assumindo relevância por segurança'
+        reasoning: 'Erro na validação - assumindo relevância por segurança',
+        tokensUsed: 0
       }
     }
   }
@@ -530,7 +542,7 @@ Responda APENAS no formato JSON:
     narrative: string,
     documents: { type: string | null; text: string }[],
     actionType: string
-  ): Promise<{ inconsistencies: string[]; overallConsistency: number; recommendations: string[] }> {
+  ): Promise<{ inconsistencies: string[]; overallConsistency: number; recommendations: string[]; tokensUsed: number }> {
     try {
       const documentsInfo = documents.map(doc =>
         `- ${doc.type || 'Tipo não identificado'}: ${doc.text?.substring(0, 100) || 'sem texto'}...`
@@ -594,10 +606,13 @@ Responda APENAS no formato JSON:
       console.log('🧹 Conteúdo limpo para parse:', cleanContent.substring(0, 200))
 
       const result = JSON.parse(cleanContent)
+      const tokensUsed = response.usage?.total_tokens || 0
+
       return {
         inconsistencies: Array.isArray(result.inconsistencies) ? result.inconsistencies : [],
         overallConsistency: Number(result.overallConsistency) || 0.5,
-        recommendations: Array.isArray(result.recommendations) ? result.recommendations : []
+        recommendations: Array.isArray(result.recommendations) ? result.recommendations : [],
+        tokensUsed
       }
 
     } catch (error) {
@@ -605,7 +620,8 @@ Responda APENAS no formato JSON:
       return {
         inconsistencies: [],
         overallConsistency: 0.5,
-        recommendations: ['Erro na análise - revisão manual recomendada']
+        recommendations: ['Erro na análise - revisão manual recomendada'],
+        tokensUsed: 0
       }
     }
   }

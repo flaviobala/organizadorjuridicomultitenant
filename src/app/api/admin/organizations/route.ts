@@ -159,6 +159,8 @@ export async function GET(request: NextRequest) {
       documentProcessedCount: org.documentProcessedCount,
       aiTokenCount: org.aiTokenCount,
       stripeCustomerId: org.stripeCustomerId,
+      mercadoPagoSubscriptionId: org.mercadoPagoSubscriptionId,
+      subscriptionDueDate: org.subscriptionDueDate,
       contactName: org.contactName,
       contactPhone: org.contactPhone,
       cnpj: org.cnpj,

@@ -11,6 +11,8 @@ interface Organization {
   documentProcessedCount: number
   aiTokenCount: number
   stripeCustomerId: string | null
+  mercadoPagoSubscriptionId?: string | null
+  subscriptionDueDate?: string | null
   contactName?: string | null
   contactPhone?: string | null
   cnpj?: string | null
@@ -125,6 +127,40 @@ export default function AdminDashboard() {
       canceled: 'bg-gray-100 text-gray-800',
     }
     return colors[status] || 'bg-gray-100 text-gray-800'
+  }
+
+  const getPaymentStatus = (dueDate: string | null | undefined) => {
+    if (!dueDate) {
+      return null // Sem data de vencimento
+    }
+
+    const now = new Date()
+    const due = new Date(dueDate)
+    const diffTime = due.getTime() - now.getTime()
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
+
+    if (diffDays < 0) {
+      return {
+        status: 'overdue',
+        label: 'VENCIDO',
+        color: 'bg-red-100 text-red-800 border-red-200',
+        icon: '🔴'
+      }
+    } else if (diffDays <= 7) {
+      return {
+        status: 'expiring',
+        label: 'PRÓXIMO A VENCER',
+        color: 'bg-yellow-100 text-yellow-800 border-yellow-200',
+        icon: '🟡'
+      }
+    } else {
+      return {
+        status: 'paid',
+        label: 'PAGO',
+        color: 'bg-green-100 text-green-800 border-green-200',
+        icon: '🟢'
+      }
+    }
   }
 
   const toggleOrg = (orgId: number) => {
@@ -325,27 +361,43 @@ export default function AdminDashboard() {
       {/* Stats Cards com gradiente premium */}
       {activeTab === 'organizations' && (
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
           <div className="bg-gradient-to-br from-purple-500 to-purple-700 rounded-xl shadow-lg p-6 text-white transform hover:scale-105 transition-transform">
             <div className="text-sm text-purple-100 mb-1 font-medium">Total de Organizações</div>
             <div className="text-4xl font-bold">{organizations.length}</div>
           </div>
           <div className="bg-gradient-to-br from-green-500 to-emerald-600 rounded-xl shadow-lg p-6 text-white transform hover:scale-105 transition-transform">
-            <div className="text-sm text-green-100 mb-1 font-medium">Assinaturas Ativas</div>
+            <div className="text-sm text-green-100 mb-1 font-medium">✅ Assinaturas Ativas</div>
             <div className="text-4xl font-bold">
               {organizations.filter(o => o.subscriptionStatus === 'active').length}
             </div>
           </div>
           <div className="bg-gradient-to-br from-amber-500 to-orange-600 rounded-xl shadow-lg p-6 text-white transform hover:scale-105 transition-transform">
-            <div className="text-sm text-amber-100 mb-1 font-medium">Em Trial</div>
+            <div className="text-sm text-amber-100 mb-1 font-medium">🆓 Em Trial</div>
             <div className="text-4xl font-bold">
               {organizations.filter(o => o.subscriptionStatus === 'trialing').length}
             </div>
           </div>
-          <div className="bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl shadow-lg p-6 text-white transform hover:scale-105 transition-transform">
-            <div className="text-sm text-blue-100 mb-1 font-medium">Total de Documentos</div>
+          <div className="bg-gradient-to-br from-red-500 to-rose-600 rounded-xl shadow-lg p-6 text-white transform hover:scale-105 transition-transform">
+            <div className="text-sm text-red-100 mb-1 font-medium">⚠️ Past Due / Canceladas</div>
             <div className="text-4xl font-bold">
-              {organizations.reduce((sum, o) => sum + o.stats.documentsCount, 0)}
+              {organizations.filter(o => o.subscriptionStatus === 'past_due' || o.subscriptionStatus === 'canceled').length}
+            </div>
+          </div>
+        </div>
+
+        {/* Segunda linha de stats - Tokens e Documentos */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+          <div className="bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl shadow-lg p-6 text-white transform hover:scale-105 transition-transform">
+            <div className="text-sm text-blue-100 mb-1 font-medium">📄 Total de Documentos</div>
+            <div className="text-4xl font-bold">
+              {organizations.reduce((sum, o) => sum + o.stats.documentsCount, 0).toLocaleString()}
+            </div>
+          </div>
+          <div className="bg-gradient-to-br from-cyan-500 to-teal-600 rounded-xl shadow-lg p-6 text-white transform hover:scale-105 transition-transform">
+            <div className="text-sm text-cyan-100 mb-1 font-medium">🤖 Total de Tokens IA</div>
+            <div className="text-4xl font-bold">
+              {organizations.reduce((sum, o) => sum + o.aiTokenCount, 0).toLocaleString()}
             </div>
           </div>
         </div>
@@ -379,20 +431,24 @@ export default function AdminDashboard() {
                 >
                   <div className="flex items-center justify-between">
                     <div className="flex-1">
-                      <div className="flex items-center gap-3">
+                      <div className="flex items-center gap-3 flex-wrap">
                         <h3 className="text-xl font-bold text-gray-900">{org.name}</h3>
                         <span className={`px-3 py-1 text-xs font-semibold rounded-full ${getPlanBadgeColor(org.planType)}`}>
-                          {org.planType}
+                          📦 {org.planType}
                         </span>
                         <span className={`px-3 py-1 text-xs font-semibold rounded-full ${getStatusBadgeColor(org.subscriptionStatus)}`}>
-                          {org.subscriptionStatus}
+                          {org.subscriptionStatus === 'active' ? '✅' :
+                           org.subscriptionStatus === 'trialing' ? '🆓' :
+                           org.subscriptionStatus === 'past_due' ? '⚠️' : '❌'} {org.subscriptionStatus}
                         </span>
                       </div>
-                      <div className="mt-3 flex gap-6 text-sm font-medium text-gray-700">
+                      <div className="mt-3 flex gap-6 text-sm font-medium text-gray-700 flex-wrap">
                         <span>👥 {org.stats.usersCount} usuários</span>
                         <span>📁 {org.stats.projectsCount} projetos</span>
                         <span>📄 {org.stats.documentsCount} documentos</span>
-                        <span>🤖 {org.aiTokenCount.toLocaleString()} tokens</span>
+                        <span className={org.aiTokenCount > 0 ? 'text-green-700 font-bold' : ''}>
+                          🤖 {(org.aiTokenCount || 0).toLocaleString()} tokens
+                        </span>
                       </div>
                     </div>
                     <button className="ml-4 p-3 hover:bg-purple-200 rounded-full transition-all">
@@ -461,6 +517,26 @@ export default function AdminDashboard() {
                         </div>
                       </div>
                     )}
+
+                    {/* Status de Pagamento */}
+                    {(() => {
+                      const paymentStatus = getPaymentStatus(org.subscriptionDueDate)
+                      return paymentStatus ? (
+                        <div className="bg-white rounded-lg p-4 mb-6 border border-purple-200">
+                          <h5 className="text-sm font-bold text-gray-700 mb-3">💳 Status de Pagamento</h5>
+                          <div className="flex items-center gap-3">
+                            <span className={`px-4 py-2 text-sm font-semibold rounded-lg border-2 ${paymentStatus.color}`}>
+                              {paymentStatus.icon} {paymentStatus.label}
+                            </span>
+                            {org.subscriptionDueDate && (
+                              <span className="text-sm text-gray-600">
+                                Vencimento: {new Date(org.subscriptionDueDate).toLocaleDateString('pt-BR')}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      ) : null
+                    })()}
 
                     <h5 className="text-sm font-bold text-purple-900 mb-3">👥 Usuários da Organização:</h5>
                     {org.users && org.users.length > 0 ? (

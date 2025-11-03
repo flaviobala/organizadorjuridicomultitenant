@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { requireAuth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { OpenAIService } from '@/lib/openai' // Assumindo que esta classe não acessa o 'prisma'
+import { incrementTokenCount } from '@/lib/plan-limits'
 import { z } from 'zod'
 
 const processNarrativeSchema = z.object({
@@ -88,6 +89,12 @@ export async function POST(request: NextRequest) {
       }
     })
 
+    // ✅ Incrementar contagem de tokens da organização
+    if (result.tokensUsed && result.tokensUsed > 0) {
+      await incrementTokenCount(auth.user.organizationId, result.tokensUsed)
+      console.log(`📊 ${result.tokensUsed} tokens contabilizados para organização ${auth.user.organizationId}`)
+    }
+
     console.log('✅ Narrativa processada com sucesso')
 
     // ... (Retorno OK) ...
@@ -98,7 +105,8 @@ export async function POST(request: NextRequest) {
         originalNarrative: narrative,
         processedNarrative: result.processedNarrative,
         suggestions: result.suggestions,
-        projectStatus: updatedProject.status
+        projectStatus: updatedProject.status,
+        tokensUsed: result.tokensUsed
       }
     })
 

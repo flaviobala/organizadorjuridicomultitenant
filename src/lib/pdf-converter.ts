@@ -125,9 +125,7 @@ export class PDFConverter {
         projectId
       })
 
-      
-
-      // 1. Extrair texto via OCR
+            // 1. Extrair texto via OCR
       let ocrText = '';
       const resultOCR = await this.extractText(inputBuffer, mimeType)
       ocrText = resultOCR.text ?? ''

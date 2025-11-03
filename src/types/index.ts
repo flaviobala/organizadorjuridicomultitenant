@@ -90,6 +90,7 @@ export interface NarrativeProcessResult {
   success: boolean
   processedNarrative?: string
   suggestions?: string[]
+  tokensUsed?: number
   error?: string
 }
 
