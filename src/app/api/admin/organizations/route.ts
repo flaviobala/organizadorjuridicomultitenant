@@ -16,7 +16,20 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json()
-    const { name, planType = 'trialing', email, password, userName } = body
+    const {
+      name,
+      planType = 'trialing',
+      email,
+      password,
+      userName,
+      contactName,
+      contactPhone,
+      cnpj,
+      address,
+      city,
+      state,
+      zipCode
+    } = body
 
     // Validar campos obrigatórios
     if (!name || !email || !password || !userName) {
@@ -45,7 +58,14 @@ export async function POST(request: NextRequest) {
         planType: planType as any,
         subscriptionStatus: 'trialing',
         documentProcessedCount: 0,
-        aiTokenCount: 0
+        aiTokenCount: 0,
+        contactName: contactName || null,
+        contactPhone: contactPhone || null,
+        cnpj: cnpj || null,
+        address: address || null,
+        city: city || null,
+        state: state || null,
+        zipCode: zipCode || null
       }
     })
 
@@ -99,7 +119,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Buscar todas as organizações com estatísticas E usuários
-    const organizations = await prisma.organization.findMany({
+    const allOrganizations = await prisma.organization.findMany({
       include: {
         _count: {
           select: {
@@ -124,6 +144,12 @@ export async function GET(request: NextRequest) {
       orderBy: { createdAt: 'desc' }
     })
 
+    // Filtrar organizações que têm apenas super_admin (organização do próprio super_admin)
+    const organizations = allOrganizations.filter(org => {
+      const hasNonSuperAdminUsers = org.users.some(user => user.role !== 'super_admin')
+      return hasNonSuperAdminUsers // Só incluir se tiver pelo menos um usuário que não seja super_admin
+    })
+
     // Formatar resposta
     const orgsWithStats = organizations.map(org => ({
       id: org.id,
@@ -133,6 +159,13 @@ export async function GET(request: NextRequest) {
       documentProcessedCount: org.documentProcessedCount,
       aiTokenCount: org.aiTokenCount,
       stripeCustomerId: org.stripeCustomerId,
+      contactName: org.contactName,
+      contactPhone: org.contactPhone,
+      cnpj: org.cnpj,
+      address: org.address,
+      city: org.city,
+      state: org.state,
+      zipCode: org.zipCode,
       createdAt: org.createdAt,
       updatedAt: org.updatedAt,
       stats: {

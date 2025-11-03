@@ -58,7 +58,10 @@ export default function LoginPage() {
         localStorage.setItem('token', result.token)
         localStorage.setItem('user', JSON.stringify(result.user))
         setMessage({ type: 'success', text: 'Login realizado com sucesso!' })
-        setTimeout(() => router.push('/dashboard'), 1000)
+
+        // Se for super_admin, vai direto para /admin
+        const redirectTo = result.user.role === 'super_admin' ? '/admin' : '/dashboard'
+        setTimeout(() => router.push(redirectTo), 1000)
       } else {
         setMessage({ type: 'error', text: result.message || 'Erro no login' })
       }

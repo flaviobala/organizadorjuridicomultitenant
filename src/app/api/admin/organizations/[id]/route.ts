@@ -1,116 +1,76 @@
-// src/app/api/admin/organizations/[id]/route.ts
 import { NextRequest, NextResponse } from 'next/server'
-import { requireAdmin } from '@/lib/auth'
-import { prisma } from '@/lib/prisma'
+import { PrismaClient } from '@prisma/client'
+import { requireSuperAdmin } from '@/lib/auth'
 
-/**
- * GET /api/admin/organizations/[id]
- * Busca detalhes de uma organização (apenas admin)
- */
-export async function GET(
-  request: NextRequest,
-  { params }: { params: { id: string } }
-) {
-  try {
-    const auth = await requireAdmin(request)
-    if (!auth.success || !auth.user) {
-      return NextResponse.json({ error: auth.error }, { status: 403 })
-    }
+const prisma = new PrismaClient()
 
-    const orgId = parseInt(params.id)
-
-    const organization = await prisma.organization.findUnique({
-      where: { id: orgId },
-      include: {
-        users: {
-          select: {
-            id: true,
-            email: true,
-            name: true,
-            role: true,
-            createdAt: true,
-          }
-        },
-        _count: {
-          select: {
-            projects: true,
-            documents: true,
-            apiUsages: true,
-          }
-        }
-      }
-    })
-
-    if (!organization) {
-      return NextResponse.json({
-        success: false,
-        error: 'Organização não encontrada'
-      }, { status: 404 })
-    }
-
-    return NextResponse.json({
-      success: true,
-      organization
-    })
-
-  } catch (error) {
-    console.error('❌ Erro ao buscar organização:', error)
-    return NextResponse.json({
-      success: false,
-      error: error instanceof Error ? error.message : 'Erro interno do servidor'
-    }, { status: 500 })
-  }
-}
-
-/**
- * PATCH /api/admin/organizations/[id]
- * Atualiza uma organização (apenas admin)
- */
+// PATCH - Atualizar organização (nome e plano)
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
+  console.log('🔵 PATCH recebido para atualizar organização')
+
+  const auth = await requireSuperAdmin(request)
+  if (!auth.success) {
+    console.log('❌ Auth falhou:', auth.error)
+    return NextResponse.json({ error: auth.error }, { status: 403 })
+  }
+
   try {
-    const auth = await requireAdmin(request)
-    if (!auth.success || !auth.user) {
-      return NextResponse.json({ error: auth.error }, { status: 403 })
-    }
+    const {
+      name,
+      planType,
+      contactName,
+      contactPhone,
+      cnpj,
+      address,
+      city,
+      state,
+      zipCode
+    } = await request.json()
 
+    const params = await context.params
     const orgId = parseInt(params.id)
-    const body = await request.json()
 
-    // Campos permitidos para atualização
-    const allowedFields = [
-      'name',
-      'planType',
-      'subscriptionStatus',
-      'documentProcessedCount',
-      'aiTokenCount',
-    ]
+    console.log('📝 Dados recebidos:', { orgId, name, planType, contactName, contactPhone, cnpj })
 
-    const updateData: any = {}
-    for (const field of allowedFields) {
-      if (body[field] !== undefined) {
-        updateData[field] = body[field]
-      }
+    // Validar plano
+    const validPlans = ['trialing', 'basic', 'pro', 'enterprise']
+    if (planType && !validPlans.includes(planType)) {
+      return NextResponse.json({ error: 'Plano inválido' }, { status: 400 })
     }
 
-    const organization = await prisma.organization.update({
+    // Atualizar organização
+    console.log('💾 Atualizando no banco...')
+    const updatedOrg = await prisma.organization.update({
       where: { id: orgId },
-      data: updateData
+      data: {
+        ...(name && { name }),
+        ...(planType && { planType }),
+        ...(contactName !== undefined && { contactName: contactName || null }),
+        ...(contactPhone !== undefined && { contactPhone: contactPhone || null }),
+        ...(cnpj !== undefined && { cnpj: cnpj || null }),
+        ...(address !== undefined && { address: address || null }),
+        ...(city !== undefined && { city: city || null }),
+        ...(state !== undefined && { state: state || null }),
+        ...(zipCode !== undefined && { zipCode: zipCode || null })
+      }
     })
+
+    console.log('✅ Organização atualizada:', updatedOrg)
 
     return NextResponse.json({
       success: true,
-      organization,
-      message: 'Organização atualizada com sucesso'
+      organization: updatedOrg
     })
 
   } catch (error) {
-    console.error('❌ Erro ao atualizar organização:', error)
+    console.error('Erro ao atualizar organização:', error)
     return NextResponse.json({
-      success: false,
-      error: error instanceof Error ? error.message : 'Erro interno do servidor'
+      error: 'Erro ao atualizar organização'
     }, { status: 500 })
+  } finally {
+    await prisma.$disconnect()
   }
 }

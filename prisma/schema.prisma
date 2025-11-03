@@ -42,6 +42,15 @@ model Organization {
   stripeCustomerId           String?            @unique @map("stripe_customer_id")
   mercadoPagoSubscriptionId  String?            @unique @map("mercadopago_subscription_id")
 
+  // Novos campos de contato e informações
+  contactName                String?            @map("contact_name")
+  contactPhone               String?            @map("contact_phone")
+  cnpj                       String?            @unique
+  address                    String?
+  city                       String?
+  state                      String?
+  zipCode                    String?            @map("zip_code")
+
   users          User[]
   projects       Project[]
   documents      Document[]
