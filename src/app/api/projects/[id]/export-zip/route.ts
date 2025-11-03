@@ -130,19 +130,91 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
     const zip = new JSZip();
 
-    // ... (Lógica de gerar PDF da Narrativa - OK, não acessa DB aqui) ...
-    if (project.narrative) {
+    // ✅ CORRIGIDO: Usar processedNarrative (já processada) ao invés de chamar API novamente
+    if (project.processedNarrative) {
       try {
-        const openai = new OpenAIService();
-        const result = await openai.processNarrative(project.narrative, 'petição inicial'); // Usar project.actionType?
-        if (result && result.success && result.processedNarrative) {
-          // ... (código pdf-lib para criar PDF da narrativa) ...
-          const pdfDoc = await PDFDocument.create();
-          // ... (adicionar texto e salvar)
-          const pdfBytes = await pdfDoc.save();
-          zip.file('01 Narrativa Fática.pdf', pdfBytes);
+        console.log('📄 Gerando PDF da Narrativa Fática processada...')
+
+        const pdfDoc = await PDFDocument.create();
+        const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+        const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+
+        // Adicionar páginas com o texto da narrativa processada
+        const maxWidth = 500;
+        const margin = 50;
+        const lineHeight = 14;
+        let page = pdfDoc.addPage([595, 842]); // A4
+        let y = 792; // Começar do topo
+
+        // Título
+        page.drawText('NARRATIVA FÁTICA', {
+          x: margin,
+          y: y,
+          size: 16,
+          font: boldFont,
+          color: rgb(0, 0, 0)
+        });
+        y -= 30;
+
+        // Texto da narrativa processada
+        const lines = project.processedNarrative.split('\n');
+        for (const line of lines) {
+          // Quebrar linhas longas
+          const words = line.split(' ');
+          let currentLine = '';
+
+          for (const word of words) {
+            const testLine = currentLine ? `${currentLine} ${word}` : word;
+            const width = font.widthOfTextAtSize(testLine, 11);
+
+            if (width > maxWidth && currentLine) {
+              // Desenhar linha atual
+              if (y < margin) {
+                page = pdfDoc.addPage([595, 842]);
+                y = 792;
+              }
+              page.drawText(currentLine, {
+                x: margin,
+                y: y,
+                size: 11,
+                font: font,
+                color: rgb(0, 0, 0)
+              });
+              y -= lineHeight;
+              currentLine = word;
+            } else {
+              currentLine = testLine;
+            }
+          }
+
+          // Desenhar última linha do parágrafo
+          if (currentLine) {
+            if (y < margin) {
+              page = pdfDoc.addPage([595, 842]);
+              y = 792;
+            }
+            page.drawText(currentLine, {
+              x: margin,
+              y: y,
+              size: 11,
+              font: font,
+              color: rgb(0, 0, 0)
+            });
+            y -= lineHeight;
+          }
+
+          // Espaço extra entre parágrafos
+          y -= 5;
         }
-      } catch (e) { console.warn('Falha ao gerar narrativa:', e); }
+
+        const pdfBytes = await pdfDoc.save();
+        zip.file('01 Narrativa Fática.pdf', pdfBytes);
+        console.log('✅ Narrativa Fática adicionada ao ZIP')
+      } catch (e) {
+        console.error('❌ Falha ao gerar narrativa:', e);
+      }
+    } else {
+      console.warn('⚠️ Projeto não possui narrativa processada')
     }
 
     // A lista 'project.documents' agora está segura (filtrada por tenant)
@@ -171,35 +243,60 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       } catch (e) { console.warn('Erro ao montar documentos pessoais:', e); }
     }
 
-    // ... (Lógica para Comprovante de Residência - OK) ...
-    const comprovanteResidencia = project.documents.find((d: Document) => { /* ... */ return false; });
+    // ✅ CORRIGIDO: Implementar filtros corretos e rastrear IDs usados
+    const usados = new Set<number>();
+
+    // Marcar documentos pessoais como usados
+    docsPessoais.forEach(d => usados.add(d.id));
+
+    // Comprovante de Residência
+    const comprovanteResidencia = project.documents.find((d: Document) => {
+      const tipo = normalizeText((d.documentType || '') + ' ' + (d.detectedDocumentType || ''));
+      return tipo.includes('comprovante') && (tipo.includes('residencia') || tipo.includes('endereco'));
+    });
     if (comprovanteResidencia?.pdfPath) {
       try {
         const buf = await getPDFBuffer(comprovanteResidencia.pdfPath);
         zip.file('03 Comprovante de Residência.pdf', buf);
-      } catch (e) { console.warn('Erro ao adicionar comprovante:', e); }
+        usados.add(comprovanteResidencia.id);
+        console.log('✅ Comprovante de Residência adicionado ao ZIP');
+      } catch (e) { console.warn('❌ Erro ao adicionar comprovante:', e); }
     }
 
-    // ... (Lógica para Procuração - OK) ...
-    const procuracao = project.documents.find((d: Document) => { /* ... */ return false; });
+    // Procuração
+    const procuracao = project.documents.find((d: Document) => {
+      const tipo = normalizeText((d.documentType || '') + ' ' + (d.detectedDocumentType || ''));
+      return tipo.includes('procuracao') || tipo.includes('outorga') || tipo.includes('mandato');
+    });
     if (procuracao?.pdfPath) {
       try {
         const buf = await getPDFBuffer(procuracao.pdfPath);
         zip.file('04 Procuração.pdf', buf);
-      } catch (e) { console.warn('Erro ao adicionar procuração:', e); }
+        usados.add(procuracao.id);
+        console.log('✅ Procuração adicionada ao ZIP');
+      } catch (e) { console.warn('❌ Erro ao adicionar procuração:', e); }
     }
 
-    // ... (Lógica para Declaração de Hipossuficiência - OK) ...
-    const hiposs = project.documents.find((d: Document) => { /* ... */ return false; });
+    // Declaração de Hipossuficiência
+    const hiposs = project.documents.find((d: Document) => {
+      const tipo = normalizeText((d.documentType || '') + ' ' + (d.detectedDocumentType || ''));
+      return tipo.includes('hipossuficiencia') || tipo.includes('declaracao');
+    });
     if (hiposs?.pdfPath) {
       try {
         const buf = await getPDFBuffer(hiposs.pdfPath);
         zip.file('05 Declaração de Hipossuficiência.pdf', buf);
-      } catch (e) { console.warn('Erro ao adicionar hipossuficiência:', e); }
+        usados.add(hiposs.id);
+        console.log('✅ Declaração de Hipossuficiência adicionada ao ZIP');
+      } catch (e) { console.warn('❌ Erro ao adicionar hipossuficiência:', e); }
     }
-    
-    // ... (Lógica para Contratos - OK) ...
-    const contratos = project.documents.filter((d: Document) => { /* ... */ return false; });
+
+    // Contratos
+    const contratos = project.documents.filter((d: Document) => {
+      const tipo = normalizeText((d.documentType || '') + ' ' + (d.detectedDocumentType || ''));
+      return tipo.includes('contrato') || tipo.includes('prestacao') || tipo.includes('servico');
+    });
+
     let nextIdx = 6;
     for (const c of contratos) {
       if (!c.pdfPath) continue;
@@ -207,25 +304,57 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         const buf = await getPDFBuffer(c.pdfPath);
         const filename = `${String(nextIdx).padStart(2, '0')} Contrato.pdf`;
         zip.file(filename, buf);
+        usados.add(c.id);
         nextIdx++;
-      } catch (e) { console.warn('Erro ao adicionar contrato:', e); }
+        console.log(`✅ ${filename} adicionado ao ZIP`);
+      } catch (e) { console.warn('❌ Erro ao adicionar contrato:', e); }
     }
 
-    // ... (Lógica para Outros Documentos - OK) ...
-    const usados = new Set([ /* ... ids ... */ ]);
+    // ✅ CORRIGIDO: Outros Documentos - processar documentos restantes na ordem correta
+    console.log(`📋 Processando outros documentos... Total de documentos: ${project.documents.length}, Já usados: ${usados.size}`);
+
     for (const doc of project.documents) {
+      // Pular documentos já adicionados
       if (usados.has(doc.id)) continue;
-      // ... (lógica para evitar duplicados de docs pessoais) ...
-      if (!doc.pdfPath) continue;
+
+      // Pular documentos sem PDF
+      if (!doc.pdfPath) {
+        console.warn(`⚠️ Documento ${doc.id} sem pdfPath, pulando...`);
+        continue;
+      }
+
       try {
         const buf = await getPDFBuffer(doc.pdfPath);
-        // ... (lógica para gerar nome limpo) ...
-        const nomeBase = sanitizeFilename(doc.smartFilename || doc.originalFilename || 'Documento') || 'Outros Documentos';
+
+        // ✅ CORRIGIDO: Usar smartFilename ou gerar nome inteligente baseado no tipo detectado
+        let nomeBase = '';
+
+        if (doc.smartFilename) {
+          // Remover numeração se já existir (ex: "02 Documentos Pessoais.pdf" -> "Documentos Pessoais")
+          nomeBase = doc.smartFilename.replace(/^\d+\s+/, '').replace(/\.pdf$/i, '');
+        } else if (doc.detectedDocumentType) {
+          nomeBase = doc.detectedDocumentType;
+        } else if (doc.documentType) {
+          // Remover o código numérico do tipo (ex: "07 ASO" -> "ASO")
+          nomeBase = doc.documentType.replace(/^\d+\s+/, '');
+        } else {
+          nomeBase = sanitizeFilename(doc.originalFilename || 'Documento').replace(/\.pdf$/i, '');
+        }
+
+        nomeBase = sanitizeFilename(nomeBase) || 'Outros Documentos';
+
+        // ✅ CORRIGIDO: Gerar filename com numeração sequencial correta
         const filename = `${String(nextIdx).padStart(2, '0')} ${nomeBase}.pdf`;
         zip.file(filename, buf);
+        usados.add(doc.id);
         nextIdx++;
-      } catch (e) { console.warn('Ignorando documento não recuperável:', doc.id, e); }
+        console.log(`✅ ${filename} adicionado ao ZIP`);
+      } catch (e) {
+        console.warn(`❌ Ignorando documento ${doc.id} não recuperável:`, e);
+      }
     }
+
+    console.log(`✅ ZIP montado com sucesso! Total de arquivos: ${Object.keys(zip.files).length}`);
 
     // Geração do ZIP (OK)
     const zipBuffer: Buffer = await zip.generateAsync({ type: 'nodebuffer' });

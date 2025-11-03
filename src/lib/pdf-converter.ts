@@ -1013,7 +1013,7 @@ RESPOSTA:`
     try {
       const project = await prisma.project.findUnique({
         where: { id: projectId },
-        select: { userId: true }
+        select: { userId: true, organizationId: true }
       })
 
       if (!project) {
@@ -1036,6 +1036,7 @@ RESPOSTA:`
         data: {
           projectId: projectId,
           userId: project.userId,
+          organizationId: project.organizationId,
           originalFilename: originalDocument.filename,
           storedFilename: result.smartFilename || 'documento.pdf',
           smartFilename: result.smartFilename,
