@@ -1033,7 +1033,7 @@
 
 'use client'
 
-import { useState, useEffect, use, useCallback } from 'react'
+import { useState, useEffect, use, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import {
   ArrowLeft,
@@ -1140,6 +1140,9 @@ export default function UploadDocumentsPage({
   }>>([])
   const [currentPreviewIndex, setCurrentPreviewIndex] = useState(0)
   const [previewKey, setPreviewKey] = useState(0) // Força remount completo
+
+  // ✅ NOVO: Ref para o input file
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   // Cleanup de preview URLs quando componente desmonta
   useEffect(() => {
@@ -1360,6 +1363,12 @@ export default function UploadDocumentsPage({
       })
       setPreviewFiles([])
       setSelectedFiles(null)
+
+      // ✅ CORRIGIDO: Resetar input file para permitir novo upload
+      if (fileInputRef.current) {
+        fileInputRef.current.value = ''
+      }
+
       loadProjectAndDocuments()
 
     } catch (error) {
@@ -1382,6 +1391,11 @@ export default function UploadDocumentsPage({
     setPreviewFiles([])
     setPreviewModalOpen(false)
     setSelectedFiles(null)
+
+    // ✅ CORRIGIDO: Resetar input file para permitir novo upload
+    if (fileInputRef.current) {
+      fileInputRef.current.value = ''
+    }
   }
 
   const loadProjectAndDocuments = useCallback(async () => {
@@ -1779,6 +1793,7 @@ export default function UploadDocumentsPage({
                   )}
 
                   <input
+                    ref={fileInputRef}
                     type="file"
                     multiple
                     accept=".pdf,.doc,.docx,.txt,.jpg,.jpeg,.png,.gif"

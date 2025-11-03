@@ -227,6 +227,12 @@ export class PDFConverter {
       if (mimeType === 'application/pdf') {
         const shouldUseBatchProcessing = await this.shouldProcessInBatches(processedBuffer)
 
+        // ✅ Pular OCR para PDFs muito grandes (> 50 páginas)
+        if (shouldUseBatchProcessing.skipOCR) {
+          console.warn('⚠️ OCR pulado - PDF muito grande')
+          return { text: '', fileBase64: '' }
+        }
+
         if (shouldUseBatchProcessing.useBatch) {
           console.log('📦 PDF grande detectado, usando processamento em lotes...')
           return await this.extractTextInBatches(processedBuffer, shouldUseBatchProcessing.pageCount)
@@ -346,7 +352,7 @@ export class PDFConverter {
    * ✅ NOVO: Verifica se PDF deve ser processado em lotes
    * Critérios: > 10MB OU > 50 páginas
    */
-  private async shouldProcessInBatches(buffer: Buffer): Promise<{ useBatch: boolean, pageCount: number }> {
+  private async shouldProcessInBatches(buffer: Buffer): Promise<{ useBatch: boolean, pageCount: number, skipOCR?: boolean }> {
     try {
       const fileSizeMB = buffer.length / (1024 * 1024)
 
@@ -361,8 +367,15 @@ export class PDFConverter {
 
           console.log(`📄 Páginas: ${pageCount}`)
 
-          // Processar em lotes se > 50 páginas OU > 10MB
-          if (pageCount > 50 || fileSizeMB > 10) {
+          // ✅ ESTRATÉGIA: OCR apenas nas primeiras 30 páginas para PDFs muito grandes
+          if (pageCount > 100) {
+            console.warn(`⚠️ PDF com ${pageCount} páginas - OCR limitado às primeiras 30 páginas`)
+            console.warn(`   💡 Processando apenas início do documento para categorização`)
+            return { useBatch: true, pageCount: 30 } // Processa só as primeiras 30 páginas
+          }
+
+          // Processar em lotes se > 10 páginas
+          if (pageCount > 10) {
             return { useBatch: true, pageCount }
           }
         } catch (pdfError) {
@@ -379,10 +392,10 @@ export class PDFConverter {
 
   /**
    * ✅ NOVO: Processa PDFs grandes em lotes menores
-   * Divide em lotes de 5 páginas e processa com Elysium
+   * Divide em lotes de 3 páginas e processa com Elysium
    */
   private async extractTextInBatches(buffer: Buffer, totalPages: number): Promise<ElysiumOCR> {
-    const pagesPerBatch = 5
+    const pagesPerBatch = 3 // ✅ BALANCEADO: 3 páginas por lote
     const extractedTexts: string[] = []
 
     try {
@@ -416,17 +429,39 @@ export class PDFConverter {
             body: JSON.stringify({ password: 'elysiumocr2025', file: batchBase64 })
           })
 
-          const data = await response.json()
+          // ✅ CORRIGIDO: Verificar status e conteúdo antes de parsear JSON
+          if (!response.ok) {
+            console.error(`   ❌ Lote ${currentBatch}: HTTP ${response.status} - ${response.statusText}`)
+            console.warn(`   ⚠️ Pulando lote ${currentBatch} devido a erro na API`)
+            continue // Pula este lote e continua com o próximo
+          }
+
+          const responseText = await response.text()
+          console.log(`   📡 Resposta Elysium (${responseText.length} chars):`, responseText.substring(0, 200))
+
+          if (!responseText || responseText.trim().length === 0) {
+            console.error(`   ❌ Lote ${currentBatch}: Resposta vazia da API Elysium`)
+            continue
+          }
+
+          let data
+          try {
+            data = JSON.parse(responseText)
+          } catch (parseError) {
+            console.error(`   ❌ Lote ${currentBatch}: Erro ao parsear JSON:`, parseError)
+            console.error(`   📄 Resposta recebida:`, responseText)
+            continue
+          }
 
           if (data.success && data.text) {
             extractedTexts.push(data.text.replace(/\s+/g, ' ').trim())
             console.log(`   ✅ Lote ${currentBatch}: ${data.text.length} caracteres`)
           } else {
-            console.log(`   ⚠️ Lote ${currentBatch}: Sem texto`)
+            console.log(`   ⚠️ Lote ${currentBatch}: Sem texto - data:`, data)
           }
 
-          // Delay para não sobrecarregar API
-          await new Promise(resolve => setTimeout(resolve, 1000))
+          // Delay para não sobrecarregar API (2 segundos entre páginas)
+          await new Promise(resolve => setTimeout(resolve, 2000))
 
         } catch (batchError) {
           console.error(`   ❌ Erro no lote ${currentBatch}:`, batchError)
