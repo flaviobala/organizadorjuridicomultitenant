@@ -41,7 +41,11 @@ export default function LandingPage() {
             {/* Imagem/Visual */}
             <div className="relative">
               <div className="aspect-[4/3] overflow-hidden rounded-lg shadow-xl bg-gray-100 flex items-center justify-center">
-                <p className="text-gray-500">Preview do Dashboard</p>
+               <img
+                  src="/dashboard.png"
+                  alt="Imagem ilustrativa do sistema jurídico"
+                  className="object-cover object-center max-w-full max-h-full object-contain"
+                />
               </div>
             </div>
           </div>
