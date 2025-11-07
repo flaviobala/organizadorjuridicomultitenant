@@ -59,14 +59,6 @@ export default function PricingPage() {
   const router = useRouter()
   const [loading, setLoading] = useState<string | null>(null)
 
-  useEffect(() => {
-    // Verificar se está logado
-    const token = localStorage.getItem('token')
-    if (!token) {
-      router.push('/login')
-    }
-  }, [router])
-
   const handleSelectPlan = async (planId: string) => {
     if (planId === 'enterprise') {
       // Para enterprise, redirecionar para contato
@@ -77,17 +69,11 @@ export default function PricingPage() {
     setLoading(planId)
 
     try {
-      const token = localStorage.getItem('token')
-      if (!token) {
-        router.push('/login')
-        return
-      }
-
+      // Criar assinatura diretamente, sem necessidade de login
       const response = await fetch('/api/billing/mercadopago/create-subscription', {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
+          'Content-Type': 'application/json'
         },
         body: JSON.stringify({ planType: planId })
       })

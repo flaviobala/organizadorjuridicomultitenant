@@ -27,13 +27,8 @@ const PLAN_PRICES = {
  */
 export async function POST(request: NextRequest) {
   try {
-    const auth = await requireAuth(request)
-    if (!auth.success || !auth.user) {
-      return NextResponse.json({ error: auth.error }, { status: 401 })
-    }
-
     const body = await request.json()
-    const { planType } = body
+    const { planType, email } = body
 
     // Validar plano
     if (!['basic', 'pro', 'enterprise'].includes(planType)) {
@@ -43,49 +38,28 @@ export async function POST(request: NextRequest) {
       }, { status: 400 })
     }
 
-    // Buscar organização
-    const organization = await prisma.organization.findUnique({
-      where: { id: auth.user.organizationId }
-    })
-
-    if (!organization) {
-      return NextResponse.json({
-        success: false,
-        error: 'Organização não encontrada'
-      }, { status: 404 })
-    }
-
-    // Definir frequência e preço
-    const price = PLAN_PRICES[planType as keyof typeof PLAN_PRICES]
-
-    // ✅ PEGAR URL DO AMBIENTE
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
-
-    // ✅ PRODUÇÃO: Usar email real do usuário logado
-    const payerEmail = auth.user.email
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || request.nextUrl.origin || 'http://localhost:3000'
+    const planPrice = PLAN_PRICES[planType as keyof typeof PLAN_PRICES]
 
     console.log('📝 [MP] Criando assinatura:', {
       planType,
-      price,
-      organizationId: organization.id,
-      organizationName: organization.name,
-      payerEmail,
+      planPrice,
       baseUrl
     })
 
     // Criar assinatura
     const subscription = await preApprovalClient.create({
       body: {
-        reason: `Plano ${planType.toUpperCase()} - ${organization.name}`,
+        reason: `Plano ${planType.toUpperCase()}`,
         auto_recurring: {
           frequency: 1,
           frequency_type: 'months',
-          transaction_amount: price,
+          transaction_amount: planPrice,
           currency_id: 'BRL'
         },
         back_url: `${baseUrl}/payment-success`,
-        payer_email: payerEmail,
-        external_reference: organization.id.toString()
+        // Não necessita de email do pagador no momento de criar a assinatura
+        external_reference: planType // Armazenar plano selecionado
       }
     })
 
