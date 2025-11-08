@@ -44,6 +44,7 @@ interface OrganizationStats {
     totalProjects: number
     totalDocuments: number
   }
+  logo_url?: string | null
 }
 
 export default function OrganizationDashboard() {
@@ -55,6 +56,13 @@ export default function OrganizationDashboard() {
   const [error, setError] = useState('')
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<'overview' | 'users' | 'projects'>('overview')
+
+  // Logo Upload States - COMENTADO TEMPORARIAMENTE
+  // const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  // const [logoPreview, setLogoPreview] = useState<string | null>(null);
+  // const [uploadingLogo, setUploadingLogo] = useState(false);
+  // const [logoUploadSuccess, setLogoUploadSuccess] = useState(false);
+  // const [logoUploadError, setLogoUploadError] = useState<string | null>(null);
 
   // Filtros
   const [filterUser, setFilterUser] = useState<string>('all')
@@ -180,6 +188,78 @@ export default function OrganizationDashboard() {
     return matchesUser && matchesStatus && matchesSearch
   })
 
+  // Funções de Logo Upload - COMENTADO TEMPORARIAMENTE
+  /*
+  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      // Validar tipo e tamanho
+      if (!['image/png', 'image/jpeg', 'image/svg+xml'].includes(file.type)) {
+        setLogoUploadError('Formato de arquivo inválido. Use PNG, JPG ou SVG.');
+        return;
+      }
+      if (file.size > 2 * 1024 * 1024) { // 2MB
+        setLogoUploadError('O arquivo é muito grande. O tamanho máximo é 2MB.');
+        return;
+      }
+
+      setSelectedFile(file);
+      setLogoPreview(URL.createObjectURL(file));
+      setLogoUploadError(null);
+      setLogoUploadSuccess(false);
+    }
+  };
+
+  const handleLogoUpload = async () => {
+    if (!selectedFile) return;
+
+    setUploadingLogo(true);
+    setLogoUploadError(null);
+    setLogoUploadSuccess(false);
+
+    const token = localStorage.getItem('token');
+    if (!token) {
+      setError('Sessão expirada. Faça login novamente.');
+      setUploadingLogo(false);
+      return;
+    }
+
+    const formData = new FormData();
+    formData.append('logo', selectedFile);
+
+    try {
+      const response = await fetch('/api/organization/logo', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+        body: formData,
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || 'Falha no upload do logo.');
+      }
+
+      const data = await response.json();
+
+      // Atualizar o estado local para refletir a nova logo
+      if (stats) {
+        setStats({ ...stats, logo_url: data.logo_url });
+      }
+      
+      setLogoUploadSuccess(true);
+      setSelectedFile(null); // Limpar seleção após o upload
+      setLogoPreview(null); // Limpar preview
+
+    } catch (err: any) {
+      setLogoUploadError(err.message);
+    } finally {
+      setUploadingLogo(false);
+    }
+  };
+  */
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -236,7 +316,11 @@ export default function OrganizationDashboard() {
           <div className="flex justify-between items-center">
             <div>
               <div className="flex items-center gap-3 mb-2">
-                <span className="text-4xl">🏢</span>
+                {stats?.logo_url ? (
+                  <img src={stats.logo_url} alt="Logo da Organização" className="h-12 w-12 object-contain rounded-md bg-white p-1 shadow-md" />
+                ) : (
+                  <span className="text-4xl">🏢</span>
+                )}
                 <h1 className="text-3xl font-bold text-white">{stats?.name || 'Organização'}</h1>
               </div>
               <div className="flex items-center gap-3 ml-14">
@@ -299,7 +383,62 @@ export default function OrganizationDashboard() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Tab: Visão Geral */}
         {activeTab === 'overview' && stats && (
-          <div className="space-y-6">
+          <div className="space-y-8">
+            {/* Seção da Logo - COMENTADO TEMPORARIAMENTE */}
+            {/*
+            <div className="bg-white rounded-xl shadow-lg p-6 border-l-4 border-blue-500">
+                <div className="flex flex-col sm:flex-row items-center gap-6">
+                    
+                    <div className="w-32 h-32 sm:w-36 sm:h-36 bg-gray-100 rounded-full flex items-center justify-center border-4 border-white shadow-md flex-shrink-0">
+                        {logoPreview ? (
+                            <img src={logoPreview} alt="Pré-visualização da Logo" className="w-full h-full object-contain rounded-full" />
+                        ) : stats.logo_url ? (
+                            <img src={stats.logo_url} alt="Logo da Organização" className="w-full h-full object-contain rounded-full" />
+                        ) : (
+                            <span className="text-gray-500 text-4xl">🏢</span>
+                        )}
+                    </div>
+                    
+                    
+                    <div className="flex-1 text-center sm:text-left">
+                        <h3 className="text-xl font-bold text-gray-800">Logo da Organização</h3>
+                        <p className="text-sm text-gray-600 mt-1 mb-4">
+                            Uma boa imagem ajuda a personalizar o ambiente para seus usuários.
+                            <br/>
+                            Formatos: PNG, JPG, SVG. Tamanho máx: 2MB.
+                        </p>
+                        <div className="flex flex-col sm:flex-row items-center gap-4">
+                            <label htmlFor="logo-upload" className="cursor-pointer px-5 py-2.5 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 font-semibold text-sm transition-all">
+                                Trocar Imagem
+                            </label>
+                            <input
+                                id="logo-upload"
+                                type="file"
+                                accept="image/png, image/jpeg, image/svg+xml"
+                                onChange={handleFileChange}
+                                className="hidden"
+                            />
+                            {selectedFile && (
+                                <div className="flex items-center gap-4">
+                                    <span className="text-sm text-gray-700 max-w-xs truncate">{selectedFile.name}</span>
+                                    <button
+                                        onClick={handleLogoUpload}
+                                        disabled={uploadingLogo}
+                                        className="px-5 py-2.5 bg-green-600 text-white rounded-lg hover:bg-green-700 font-semibold shadow-md transition-all disabled:bg-gray-400 disabled:cursor-not-allowed text-sm"
+                                    >
+                                        {uploadingLogo ? 'Enviando...' : 'Salvar'}
+                                    </button>
+                                </div>
+                            )}
+                        </div>
+                         {logoUploadError && <p className="text-sm text-red-600 mt-3">{logoUploadError}</p>}
+                         {logoUploadSuccess && <p className="text-sm text-green-600 mt-3">✅ Logo atualizado com sucesso!</p>}
+                         {uploadingLogo && <p className="text-sm text-blue-600 mt-3 animate-pulse">Enviando imagem...</p>}
+                    </div>
+                </div>
+            </div>
+            */}
+
             {/* Stats Cards */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
               <div className="bg-gradient-to-br from-blue-500 to-blue-700 rounded-xl shadow-lg p-6 text-white transform hover:scale-105 transition-transform">

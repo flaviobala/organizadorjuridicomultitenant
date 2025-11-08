@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
+import Image from 'next/image'
 import { Eye, EyeOff, Scale, ArrowLeft } from 'lucide-react'
 import Link from 'next/link'
 
@@ -64,9 +65,15 @@ export default function LoginPage() {
         <div className="relative hidden lg:block">
           <div className="absolute inset-0 bg-gradient-to-br from-blue-900 to-blue-950 opacity-90"></div>
           <div className="relative z-10 flex flex-col justify-center items-center h-full p-12 text-white">
-            <Scale className="w-16 h-16" />
+            <Image
+              src="/logo.png"
+              alt="Logo Principal"
+              width={200}
+              height={200}
+              className="rounded-lg"
+            />
             <h2 className="mt-6 text-3xl font-bold text-center">
-              Gestão jurídica completa, do processo à petição
+              Gestão jurídica completa para escritórios modernos
             </h2>
             <p className="mt-4 text-lg text-blue-100 text-center opacity-90">
               Segurança, eficiência e controle total para o seu escritório
@@ -79,7 +86,13 @@ export default function LoginPage() {
           <div className="w-full max-w-md space-y-8">
             {/* Cabeçalho do Formulário */}
             <div>
-              <Scale className="mx-auto h-12 w-12 text-blue-800" />
+              <Image
+                src="/logo.png"
+                alt="Logo"
+                width={150}
+                height={150}
+                className="mx-auto"
+              />
               <h2 className="mt-6 text-center text-3xl font-bold tracking-tight text-gray-900">
                 Acesso ao Sistema
               </h2>

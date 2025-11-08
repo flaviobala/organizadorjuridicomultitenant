@@ -1,7 +1,5 @@
-'use client'
-
+import Image from 'next/image'
 import Link from 'next/link'
-import { FaBalanceScale } from 'react-icons/fa'
 
 export default function Navbar() {
   return (
@@ -9,9 +7,11 @@ export default function Navbar() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center py-4">
           {/* Logo */}
-          <Link href="/" className="flex items-center gap-2 text-blue-700">
-            <FaBalanceScale className="h-8 w-8" />
-            <span className="font-bold text-xl">Sistema Jurídico</span>
+          <Link href="/" className="flex items-center gap-2">
+            <Image src="/logo.png" alt="Logo" width={40} height={40} />
+            <span className="font-bold text-xl text-blue-700">
+              Sistema Jurídico
+            </span>
           </Link>
 
           {/* Navigation Links - Center */}
@@ -29,8 +29,8 @@ export default function Navbar() {
 
           {/* Actions - Right */}
           <div className="flex items-center gap-4">
-            <Link 
-              href="/login" 
+            <Link
+              href="/login"
               className="text-sm font-medium text-gray-600 hover:text-blue-700"
             >
               Já é cliente? Entrar

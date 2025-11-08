@@ -113,11 +113,6 @@ export default function TokenUsageCard() {
       {/* Stats Grid */}
       <div className="grid grid-cols-2 gap-3 pt-3 border-t border-gray-100">
         <div>
-          <p className="text-xs text-gray-500">Custo estimado</p>
-          <p className="text-sm font-semibold text-gray-900">R$ {usage.costBRL.toFixed(2)}</p>
-        </div>
-
-        <div>
           <p className="text-xs text-gray-500">Documentos</p>
           <p className="text-sm font-semibold text-gray-900">{usage.documentsProcessed} docs</p>
         </div>
