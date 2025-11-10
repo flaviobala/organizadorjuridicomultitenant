@@ -1,17 +1,10 @@
 import { PDFDocument, PageSizes, rgb } from 'pdf-lib'
 import sharp, { type Metadata } from 'sharp'
-import { createClient } from '@supabase/supabase-js'
+import { uploadFile, downloadFile } from './storage-service'
 import { prisma } from './prisma'
 import OpenAI from 'openai'
 import type { DocumentAnalysis } from '@/types'
 import { trackTokens, estimateTokens } from './token-tracker'
-
-// pdf-parse doesn't have types, so we'll type it inline
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-)
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY!,
@@ -1160,17 +1153,28 @@ RESPOSTA:`
       // Processar cada documento pessoal
       for (const doc of personalDocs) {
         if (!doc.pdfPath) continue
-        
+
         try {
-          const pdfPathClean = doc.pdfPath.replace(/.*\/documents\//, '').replace('processed/', '')
-          const { data: pdfData, error } = await supabase.storage
-            .from('documents')
-            .download(`processed/${pdfPathClean}`)
-          
-          if (error || !pdfData) continue
-          
-          const arrayBuffer = await pdfData.arrayBuffer()
-          const existingPdf = await PDFDocument.load(arrayBuffer, { ignoreEncryption: true })
+          // Extrair caminho do storage (compatível com Supabase e Local)
+          let storagePath = doc.pdfPath
+
+          // URL Supabase
+          if (doc.pdfPath.includes('/documents/')) {
+            storagePath = doc.pdfPath.split('/documents/')[1]
+          }
+          // URL Local
+          else if (doc.pdfPath.includes('/uploads/')) {
+            storagePath = doc.pdfPath.split('/uploads/')[1]
+          }
+          // Caminho relativo
+          else {
+            storagePath = storagePath.replace(/^processed\//, '')
+            storagePath = `processed/${storagePath}`
+          }
+
+          // Baixar usando storage-service
+          const pdfData = await downloadFile(storagePath)
+          const existingPdf = await PDFDocument.load(pdfData, { ignoreEncryption: true })
           
           // Adicionar página separadora
           const separatorPage = combinedPdf.addPage(PageSizes.A4)
@@ -1205,27 +1209,27 @@ RESPOSTA:`
       
       // Salvar PDF combinado
       const combinedFilename = '02 Documentos Pessoais.pdf'
-      
-      const { error: uploadError } = await supabase.storage
-        .from('documents')
-        .upload(`processed/${combinedFilename}`, pdfBuffer, {
-          contentType: 'application/pdf',
-          upsert: true
-        })
-      
-      if (uploadError) {
-        throw new Error('Falha no upload do PDF combinado: ' + uploadError.message)
+      const storagePath = `processed/${combinedFilename}`
+
+      // Upload usando storage-service
+      const file = new File([pdfBuffer], combinedFilename, { type: 'application/pdf' })
+      await uploadFile(file, storagePath)
+
+      // Gerar URL pública
+      let publicURL: string
+      if (process.env.UPLOAD_DIR && process.env.NEXT_PUBLIC_UPLOAD_URL) {
+        publicURL = `${process.env.NEXT_PUBLIC_UPLOAD_URL}/${storagePath}`
+      } else if (process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.SUPABASE_BUCKET_NAME) {
+        publicURL = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/${process.env.SUPABASE_BUCKET_NAME}/${storagePath}`
+      } else {
+        throw new Error('Configuração de storage não encontrada')
       }
-      
-      const { data: publicURL } = supabase.storage
-        .from('documents')
-        .getPublicUrl(`processed/${combinedFilename}`)
-      
+
       console.log(`✅ PDF combinado salvo: ${combinedFilename} (${totalPages} páginas)`)
-      
+
       return {
         success: true,
-        pdfPath: publicURL.publicUrl,
+        pdfPath: publicURL,
         pdfBuffer,
         ocrText: '',
         pageCount: totalPages,
@@ -1693,20 +1697,24 @@ RESPOSTA:`
 
       console.log('📤 Salvando PDF:', filename, '→', sanitizedFilename)
 
-      const { error: uploadError } = await supabase.storage
-        .from('documents')
-        .upload(`processed/${sanitizedFilename}`, pdfBuffer, {
-          contentType: 'application/pdf',
-          upsert: false  // ✅ CRÍTICO: Não sobrescrever arquivos
-        })
+      // Upload usando storage-service
+      const storagePath = `processed/${sanitizedFilename}`
 
-      if (uploadError) {
-        throw new Error('Falha no upload: ' + uploadError.message)
+      // Criar um objeto File a partir do Buffer para upload
+      const file = new File([pdfBuffer], sanitizedFilename, { type: 'application/pdf' })
+      await uploadFile(file, storagePath)
+
+      // Gerar URL pública (Local ou Supabase)
+      let publicURL: string
+      if (process.env.UPLOAD_DIR && process.env.NEXT_PUBLIC_UPLOAD_URL) {
+        // Storage Local
+        publicURL = `${process.env.NEXT_PUBLIC_UPLOAD_URL}/${storagePath}`
+      } else if (process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.SUPABASE_BUCKET_NAME) {
+        // Storage Supabase (fallback)
+        publicURL = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/${process.env.SUPABASE_BUCKET_NAME}/${storagePath}`
+      } else {
+        throw new Error('Configuração de storage não encontrada')
       }
-
-      const { data: publicURL } = supabase.storage
-        .from('documents')
-        .getPublicUrl(`processed/${sanitizedFilename}`)
 
       // ✅ CORREÇÃO: Gerar nome inteligente baseado na análise IA
       const smartFilename = this.generateSmartFilename(
@@ -1718,7 +1726,7 @@ RESPOSTA:`
 
       return {
         success: true,
-        pdfPath: publicURL.publicUrl,
+        pdfPath: publicURL,
         pdfBuffer,
         ocrText: originalDocument.ocrText || '',
         pageCount: 1,

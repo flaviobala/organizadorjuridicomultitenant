@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
-import { createClient } from '@supabase/supabase-js';
+import { downloadFile } from '@/lib/storage-service';
 import JSZip from 'jszip';
 import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
 import { OpenAIService } from '@/lib/openai'; // Assumindo que não usa prisma
@@ -30,39 +30,59 @@ interface Document {
   updatedAt: Date;
 }
 
-// Supabase (server-side, com SERVICE_ROLE_KEY) - OK
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
+// Funções Auxiliares
+function sanitizeFilename(name = '') {
+  return name.toString().replace(/[\u0000-\u001F\u007F<>:"\/\\|?*\x00-\x1F]/g, '-').replace(/\s+/g, ' ').trim().slice(0, 120);
+}
+function normalizeText(s = '') {
+  return s.toString().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+}
 
-// Funções Auxiliares (sanitizeFilename, normalizeText, getPDFBuffer, combinePdfBuffers) - OK
-// getPDFBuffer usa SERVICE_ROLE_KEY, o que é correto para baixar os arquivos físicos
-// após a validação de acesso ao projeto.
-function sanitizeFilename(name = '') { /* ... */ return name.toString().replace(/[\u0000-\u001F\u007F<>:"\/\\|?*\x00-\x1F]/g, '-').replace(/\s+/g, ' ').trim().slice(0, 120); }
-function normalizeText(s = '') { /* ... */ return s.toString().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, ''); }
+/**
+ * Baixa um PDF do storage (local ou Supabase)
+ * Extrai o caminho correto de URLs Supabase ou locais
+ */
 async function getPDFBuffer(pdfPath: string): Promise<Buffer> {
   if (!pdfPath) throw new Error('pdfPath vazio');
   let storagePath = pdfPath;
+
+  // Se for URL, extrair o caminho do storage
   if (/^https?:\/\//i.test(pdfPath)) {
     try {
       const u = new URL(pdfPath);
-      const idx = u.pathname.indexOf('/documents/');
-      if (idx >= 0) {
-        storagePath = u.pathname.substring(idx + '/documents/'.length);
+
+      // Tentar extrair de URL Supabase
+      const supabaseIdx = u.pathname.indexOf('/documents/');
+      if (supabaseIdx >= 0) {
+        storagePath = u.pathname.substring(supabaseIdx + '/documents/'.length);
       } else {
-        storagePath = u.pathname.replace(/^\/+/, '');
+        // Tentar extrair de URL local
+        const uploadsIdx = u.pathname.indexOf('/uploads/');
+        if (uploadsIdx >= 0) {
+          storagePath = u.pathname.substring(uploadsIdx + '/uploads/'.length);
+        } else {
+          storagePath = u.pathname.replace(/^\/+/, '');
+        }
       }
-    } catch { throw new Error('URL inválida para pdfPath: ' + pdfPath); }
+    } catch {
+      throw new Error('URL inválida para pdfPath: ' + pdfPath);
+    }
   }
+
   storagePath = storagePath.replace(/^\/+/, '');
-  const { data, error } = await supabase.storage.from('documents').download(storagePath);
-  if (error) throw new Error('Erro ao baixar PDF do Supabase: ' + (error.message || JSON.stringify(error)));
-  if (!data) throw new Error('Nenhum dado retornado do Supabase para ' + storagePath);
-  const arrayBuffer = await data.arrayBuffer();
-  return Buffer.from(arrayBuffer);
+
+  // Usar storage-service para baixar
+  try {
+    const data = await downloadFile(storagePath);
+    return Buffer.from(data);
+  } catch (error) {
+    throw new Error('Erro ao baixar PDF: ' + (error instanceof Error ? error.message : 'Erro desconhecido'));
+  }
 }
-async function combinePdfBuffers(buffers: Buffer[]): Promise<Buffer> { /* ... */ return Buffer.from([]); }
+
+async function combinePdfBuffers(buffers: Buffer[]): Promise<Buffer> {
+  return Buffer.from([]);
+}
 
 
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {

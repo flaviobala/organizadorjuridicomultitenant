@@ -2,13 +2,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireAuth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
-import { createClient } from '@supabase/supabase-js'
-
-// ✅ SUPABASE CLIENT CONSISTENTE
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-)
+import { deleteFile } from '@/lib/storage-service'
 
 export async function DELETE(
   request: NextRequest,
@@ -61,35 +55,28 @@ export async function DELETE(
       pdfPath: document.pdfPath
     })
 
-    // ✅ LÓGICA DE EXCLUSÃO DO SUPABASE STORAGE (Está correta)
-    // A 'SERVICE_ROLE_KEY' bypassa o RLS, o que é necessário para
-    // que a aplicação (admin) possa apagar os arquivos físicos.
+    // ✅ LÓGICA DE EXCLUSÃO DO STORAGE (Local ou Supabase)
     const filesToDelete = []
-    
-    if (document.storedFilename && document.storedFilename.includes('supabase')) {
-      const originalPath = extractSupabasePath(document.storedFilename, 'original/')
+
+    // Extrair caminho do arquivo original
+    if (document.storedFilename) {
+      const originalPath = extractStoragePath(document.storedFilename, 'original/')
       if (originalPath) filesToDelete.push(originalPath)
     }
 
-    if (document.pdfPath && document.pdfPath.includes('supabase')) {
-      const processedPath = extractSupabasePath(document.pdfPath, 'processed/')
+    // Extrair caminho do PDF processado
+    if (document.pdfPath) {
+      const processedPath = extractStoragePath(document.pdfPath, 'processed/')
       if (processedPath) filesToDelete.push(processedPath)
     }
 
     let deletedFilesCount = 0
     for (const path of filesToDelete) {
       try {
-        console.log('🗑️ Tentando excluir arquivo do Supabase:', path)
-        const { error } = await supabase.storage
-          .from('documents')
-          .remove([path])
-
-        if (error) {
-          console.warn('⚠️ Erro ao excluir arquivo do Supabase:', path, error)
-        } else {
-          console.log('✅ Arquivo excluído do Supabase:', path)
-          deletedFilesCount++
-        }
+        console.log('🗑️ Tentando excluir arquivo do storage:', path)
+        await deleteFile(path)
+        console.log('✅ Arquivo excluído do storage:', path)
+        deletedFilesCount++
       } catch (error) {
         console.warn('⚠️ Erro ao excluir arquivo:', path, error)
       }
@@ -121,20 +108,38 @@ export async function DELETE(
   }
 }
 
-// ✅ FUNÇÃO AUXILIAR (Sem mudanças)
-function extractSupabasePath(url: string, prefix: string): string | null {
+/**
+ * Extrai o caminho do storage de uma URL (Supabase ou Local)
+ * Exemplos:
+ * - Supabase: https://xxx.supabase.co/storage/v1/object/public/documents/processed/file.pdf → processed/file.pdf
+ * - Local: http://localhost:3000/uploads/processed/file.pdf → processed/file.pdf
+ * - Caminho relativo: processed/file.pdf → processed/file.pdf
+ */
+function extractStoragePath(url: string, prefix?: string): string | null {
   try {
+    // Se não é uma URL, retornar como está
+    if (!url.startsWith('http://') && !url.startsWith('https://')) {
+      return url
+    }
+
     const urlObj = new URL(url)
     const pathParts = urlObj.pathname.split('/')
+
+    // Tentar extrair de URL Supabase
     const documentsIndex = pathParts.indexOf('documents')
-    
     if (documentsIndex !== -1 && documentsIndex < pathParts.length - 1) {
       return pathParts.slice(documentsIndex + 1).join('/')
     }
-    
+
+    // Tentar extrair de URL Local
+    const uploadsIndex = pathParts.indexOf('uploads')
+    if (uploadsIndex !== -1 && uploadsIndex < pathParts.length - 1) {
+      return pathParts.slice(uploadsIndex + 1).join('/')
+    }
+
     return null
   } catch (error) {
-    console.warn('Erro ao extrair path do Supabase:', error)
+    console.warn('Erro ao extrair path do storage:', error)
     return null
   }
 }

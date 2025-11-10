@@ -1,14 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { createClient } from '@supabase/supabase-js'
+import { downloadFile } from '@/lib/storage-service'
 import sharp from 'sharp'
 import { PDFDocument } from 'pdf-lib'
 import jwt from 'jsonwebtoken'
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-)
+import fs from 'fs'
+import path from 'path'
 
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key'
 
@@ -81,43 +78,49 @@ export async function POST(
       originalFilename: document.originalFilename
     })
 
-    // Baixar PDF do Supabase
+    // Baixar PDF do storage
     if (!document.pdfPath) {
       return NextResponse.json({ success: false, error: 'Documento não possui PDF' }, { status: 400 })
     }
 
     // Extrair o caminho correto do arquivo a partir do pdfPath
-    // pdfPath exemplo: "https://xxx.supabase.co/storage/v1/object/public/documents/processed/arquivo.pdf"
+    // pdfPath pode ser: "https://xxx.supabase.co/storage/v1/object/public/documents/processed/arquivo.pdf"
+    // ou "http://localhost:3000/uploads/processed/arquivo.pdf"
     let storagePath = ''
 
     // Tentar extrair do pdfPath (mais confiável)
     const pdfPathParts = document.pdfPath.split('/documents/')
     if (pdfPathParts.length > 1) {
       storagePath = pdfPathParts[1]
-      console.log(`📁 Caminho extraído do pdfPath: ${storagePath}`)
-    } else if (document.storedFilename) {
-      // Fallback: usar storedFilename
-      storagePath = document.storedFilename.startsWith('processed/')
-        ? document.storedFilename
-        : `processed/${document.storedFilename}`
-      console.log(`📁 Usando storedFilename: ${storagePath}`)
+      console.log(`📁 Caminho extraído do pdfPath (Supabase): ${storagePath}`)
     } else {
-      console.error('❌ Não foi possível extrair caminho do arquivo')
-      return NextResponse.json({ success: false, error: 'Não foi possível determinar o caminho do arquivo' }, { status: 400 })
+      // Tentar extrair de URL local
+      const uploadsParts = document.pdfPath.split('/uploads/')
+      if (uploadsParts.length > 1) {
+        storagePath = uploadsParts[1]
+        console.log(`📁 Caminho extraído do pdfPath (Local): ${storagePath}`)
+      } else if (document.storedFilename) {
+        // Fallback: usar storedFilename
+        storagePath = document.storedFilename.startsWith('processed/')
+          ? document.storedFilename
+          : `processed/${document.storedFilename}`
+        console.log(`📁 Usando storedFilename: ${storagePath}`)
+      } else {
+        console.error('❌ Não foi possível extrair caminho do arquivo')
+        return NextResponse.json({ success: false, error: 'Não foi possível determinar o caminho do arquivo' }, { status: 400 })
+      }
     }
 
-    const { data: pdfData, error: downloadError } = await supabase.storage
-      .from('documents')
-      .download(storagePath)
-
-    if (downloadError || !pdfData) {
+    // Usar storage-service para baixar o arquivo
+    let pdfBuffer: Buffer
+    try {
+      const pdfData = await downloadFile(storagePath)
+      pdfBuffer = Buffer.from(pdfData)
+      console.log(`📥 PDF baixado com sucesso: ${(pdfBuffer.length / 1024).toFixed(2)} KB`)
+    } catch (downloadError) {
       console.error('❌ Erro ao baixar PDF:', downloadError)
       return NextResponse.json({ success: false, error: 'Erro ao baixar documento' }, { status: 500 })
     }
-
-    // Converter Blob para Buffer
-    const arrayBuffer = await pdfData.arrayBuffer()
-    const pdfBuffer = Buffer.from(arrayBuffer)
 
     // Carregar PDF
     const pdfDoc = await PDFDocument.load(pdfBuffer, { ignoreEncryption: true })
@@ -145,14 +148,17 @@ export async function POST(
     console.log(`💾 PDF rotacionado: ${(rotatedPdfBuffer.length / 1024).toFixed(2)} KB`)
 
     // Fazer upload do PDF rotacionado (sobrescrever)
-    const { error: uploadError } = await supabase.storage
-      .from('documents')
-      .upload(storagePath, rotatedPdfBuffer, {
-        contentType: 'application/pdf',
-        upsert: true // Sobrescrever arquivo existente
-      })
-
-    if (uploadError) {
+    try {
+      // Para storage local, sobrescrever o arquivo diretamente
+      if (process.env.UPLOAD_DIR) {
+        const fullPath = path.join(process.env.UPLOAD_DIR, storagePath)
+        fs.mkdirSync(path.dirname(fullPath), { recursive: true })
+        fs.writeFileSync(fullPath, rotatedPdfBuffer)
+        console.log(`✅ PDF rotacionado salvo localmente: ${fullPath}`)
+      } else {
+        throw new Error('UPLOAD_DIR não configurado')
+      }
+    } catch (uploadError) {
       console.error('❌ Erro ao fazer upload:', uploadError)
       return NextResponse.json({ success: false, error: 'Erro ao salvar documento rotacionado' }, { status: 500 })
     }
