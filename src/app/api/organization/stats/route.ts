@@ -51,6 +51,7 @@ export async function GET(request: NextRequest) {
         subscriptionStatus: organization.subscriptionStatus,
         aiTokenCount: organization.aiTokenCount,
         documentProcessedCount: organization.documentProcessedCount,
+        logo_url: organization.logo_url, // ✅ Incluir logo_url no response
         limits: {
           maxTokens: limits.maxTokens,
           maxDocuments: limits.maxDocuments,

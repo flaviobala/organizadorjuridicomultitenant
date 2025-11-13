@@ -57,12 +57,12 @@ export default function OrganizationDashboard() {
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<'overview' | 'users' | 'projects'>('overview')
 
-  // Logo Upload States - COMENTADO TEMPORARIAMENTE
-  // const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  // const [logoPreview, setLogoPreview] = useState<string | null>(null);
-  // const [uploadingLogo, setUploadingLogo] = useState(false);
-  // const [logoUploadSuccess, setLogoUploadSuccess] = useState(false);
-  // const [logoUploadError, setLogoUploadError] = useState<string | null>(null);
+  // Logo Upload States
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [logoPreview, setLogoPreview] = useState<string | null>(null);
+  const [uploadingLogo, setUploadingLogo] = useState(false);
+  const [logoUploadSuccess, setLogoUploadSuccess] = useState(false);
+  const [logoUploadError, setLogoUploadError] = useState<string | null>(null);
 
   // Filtros
   const [filterUser, setFilterUser] = useState<string>('all')
@@ -188,8 +188,7 @@ export default function OrganizationDashboard() {
     return matchesUser && matchesStatus && matchesSearch
   })
 
-  // Funções de Logo Upload - COMENTADO TEMPORARIAMENTE
-  /*
+  // Funções de Logo Upload
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
@@ -247,7 +246,7 @@ export default function OrganizationDashboard() {
       if (stats) {
         setStats({ ...stats, logo_url: data.logo_url });
       }
-      
+
       setLogoUploadSuccess(true);
       setSelectedFile(null); // Limpar seleção após o upload
       setLogoPreview(null); // Limpar preview
@@ -258,7 +257,6 @@ export default function OrganizationDashboard() {
       setUploadingLogo(false);
     }
   };
-  */
 
   if (loading) {
     return (
@@ -384,11 +382,10 @@ export default function OrganizationDashboard() {
         {/* Tab: Visão Geral */}
         {activeTab === 'overview' && stats && (
           <div className="space-y-8">
-            {/* Seção da Logo - COMENTADO TEMPORARIAMENTE */}
-            {/*
+            {/* Seção da Logo */}
             <div className="bg-white rounded-xl shadow-lg p-6 border-l-4 border-blue-500">
                 <div className="flex flex-col sm:flex-row items-center gap-6">
-                    
+
                     <div className="w-32 h-32 sm:w-36 sm:h-36 bg-gray-100 rounded-full flex items-center justify-center border-4 border-white shadow-md flex-shrink-0">
                         {logoPreview ? (
                             <img src={logoPreview} alt="Pré-visualização da Logo" className="w-full h-full object-contain rounded-full" />
@@ -398,8 +395,8 @@ export default function OrganizationDashboard() {
                             <span className="text-gray-500 text-4xl">🏢</span>
                         )}
                     </div>
-                    
-                    
+
+
                     <div className="flex-1 text-center sm:text-left">
                         <h3 className="text-xl font-bold text-gray-800">Logo da Organização</h3>
                         <p className="text-sm text-gray-600 mt-1 mb-4">
@@ -437,7 +434,6 @@ export default function OrganizationDashboard() {
                     </div>
                 </div>
             </div>
-            */}
 
             {/* Stats Cards */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
