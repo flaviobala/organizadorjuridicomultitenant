@@ -50,6 +50,7 @@ public/temp/
 *.jpg
 *.png
 !public/logo.png
+!public/dashboard.png
 public/uploads/ 
 nul
 test-mp-direct.js
