@@ -40,11 +40,11 @@ export default function LandingPage() {
 
             {/* Imagem/Visual */}
             <div className="relative">
-              <div className="aspect-[4/3] overflow-hidden rounded-lg shadow-xl bg-gray-100 flex items-center justify-center">
+              <div className="rounded-xl shadow-2xl bg-gradient-to-br from-gray-50 to-gray-100 p-4 border border-gray-200">
                <img
                   src="/dashboard.png"
                   alt="Imagem ilustrativa do sistema jurídico"
-                  className="object-cover object-center max-w-full max-h-full object-contain"
+                  className="w-full h-auto rounded-lg"
                 />
               </div>
             </div>
