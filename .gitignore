@@ -45,10 +45,11 @@ next-env.d.ts
 "public/temp/" 
 public/uploads/ 
 public/temp/   
-*.pdf 
-*.docx 
-*.jpg 
-*.png 
+*.pdf
+*.docx
+*.jpg
+*.png
+!public/logo.png
 public/uploads/ 
 nul
 test-mp-direct.js
