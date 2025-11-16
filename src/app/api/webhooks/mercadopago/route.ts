@@ -24,10 +24,9 @@ export async function POST(request: NextRequest) {
     const signature = request.headers.get('x-signature')
     const requestId = request.headers.get('x-request-id')
 
-    // ⚠️ TEMPORÁRIO: Aceitar webhooks sem assinatura até testar
-    // TODO: Reativar validação de assinatura após testes
+    // Validação de assinatura ativada
     const isProduction = process.env.NODE_ENV === 'production'
-    const FORCE_ACCEPT_UNSIGNED = true // ⚠️ MUDAR PARA false DEPOIS DOS TESTES
+    const FORCE_ACCEPT_UNSIGNED = false
 
     if (signature && !FORCE_ACCEPT_UNSIGNED) {
       // Se tem signature, validar

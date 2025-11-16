@@ -18,7 +18,7 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     const {
       name,
-      planType = 'trialing',
+      planType = 'free',
       email,
       password,
       userName,
@@ -52,11 +52,19 @@ export async function POST(request: NextRequest) {
     }
 
     // Criar organização
+    // Se for plano FREE, definir data de expiração de 5 dias
+    const freeTrialEndsAt = planType === 'free' ? (() => {
+      const date = new Date()
+      date.setDate(date.getDate() + 5)
+      return date
+    })() : null
+
     const organization = await prisma.organization.create({
       data: {
         name,
         planType: planType as any,
-        subscriptionStatus: 'trialing',
+        subscriptionStatus: planType === 'free' ? 'free_trial' : 'active',
+        freeTrialEndsAt: freeTrialEndsAt,
         documentProcessedCount: 0,
         aiTokenCount: 0,
         contactName: contactName || null,

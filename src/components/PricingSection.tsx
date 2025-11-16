@@ -4,6 +4,22 @@ import Link from 'next/link'
 export default function PricingSection() {
   const plans = [
     {
+      id: 'free',
+      name: 'Free',
+      price: 'Grátis',
+      period: '5 dias',
+      paymentMethods: 'Requer cartão de crédito',
+      features: [
+        '50 documentos',
+        '100k tokens IA',
+        'Até 2 usuários',
+        'Processamento básico',
+        'Categorização IA',
+        '5 dias de teste',
+      ],
+      highlighted: false,
+    },
+    {
       id: 'basic',
       name: 'Basic',
       price: 'R$ 15,00',
@@ -22,7 +38,7 @@ export default function PricingSection() {
     {
       id: 'pro',
       name: 'Pro',
-      price: 'R$ 20,00',
+      price: 'R$ 25,00',
       period: '/mês',
       paymentMethods: 'Pix, Boleto ou Cartão',
       features: [
@@ -34,22 +50,6 @@ export default function PricingSection() {
         'Suporte prioritário',
       ],
       highlighted: true,
-    },
-    {
-      id: 'enterprise',
-      name: 'Enterprise',
-      price: 'R$ 199,90',
-      period: '/mês',
-      paymentMethods: 'Pix, Boleto ou Cartão',
-      features: [
-        'Documentos ilimitados',
-        'Tokens ilimitados',
-        'Usuários ilimitados',
-        'Tudo do Pro +',
-        'Integração customizada',
-        'Suporte dedicado',
-      ],
-      highlighted: false,
     }
   ]
 
@@ -99,14 +99,16 @@ export default function PricingSection() {
                 </ul>
 
                 <Link
-                  href="/pricing"
+                  href="/register"
                   className={`w-full py-3 px-6 rounded-lg font-semibold transition-colors text-center block ${
                     plan.highlighted
                       ? 'bg-blue-600 text-white hover:bg-blue-700'
-                      : 'bg-gray-100 text-gray-900 hover:bg-gray-200'
+                      : plan.id === 'free'
+                        ? 'bg-green-600 text-white hover:bg-green-700'
+                        : 'bg-gray-100 text-gray-900 hover:bg-gray-200'
                   }`}
                 >
-                  {plan.id === 'enterprise' ? 'Fale conosco' : 'Assinar agora'}
+                  {plan.id === 'free' ? 'Começar grátis' : 'Assinar agora'}
                 </Link>
               </div>
             </div>

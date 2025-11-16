@@ -52,7 +52,17 @@ export async function verifyPassword(password: string, hashedPassword: string): 
 }
 
 // Registrar usuário
-export async function registerUser(email: string, password: string, name: string): Promise<AuthResult> {
+export async function registerUser(
+  email: string,
+  password: string,
+  name: string,
+  cardData?: {
+    cardToken?: string
+    cardLastFourDigits?: string
+    cardHolderName?: string
+    cardHolderCpf?: string
+  }
+): Promise<AuthResult> {
   try {
     // Verificar se o usuário já existe
     const existingUser = await prisma.user.findUnique({
@@ -67,13 +77,23 @@ export async function registerUser(email: string, password: string, name: string
     }
 
     // Criar organização automaticamente para o novo usuário
+    // Plano FREE com 5 DIAS de teste
+    const freeTrialEndsAt = new Date()
+    freeTrialEndsAt.setDate(freeTrialEndsAt.getDate() + 5) // 5 DIAS a partir de agora
+
     const organization = await prisma.organization.create({
       data: {
         name: `${name}'s Organization`,
-        planType: 'trialing',
-        subscriptionStatus: 'trialing',
+        planType: 'free',
+        subscriptionStatus: 'free_trial',
+        freeTrialEndsAt: freeTrialEndsAt,
         documentProcessedCount: 0,
-        aiTokenCount: 0
+        aiTokenCount: 0,
+        // Dados do cartão (se fornecidos)
+        paymentCardToken: cardData?.cardToken,
+        cardLastFourDigits: cardData?.cardLastFourDigits,
+        cardHolderName: cardData?.cardHolderName,
+        cardHolderCpf: cardData?.cardHolderCpf
       }
     })
 

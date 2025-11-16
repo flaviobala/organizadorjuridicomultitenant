@@ -7,6 +7,22 @@ const JWT_SECRET = process.env.JWT_SECRET || 'fallback-secret-key'
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
+  const hostname = request.headers.get('host') || ''
+
+  // Se acessar app.advconecta.com.br na raiz, redirecionar para /login
+  if (hostname.startsWith('app.') && pathname === '/') {
+    return NextResponse.redirect(new URL('/login', request.url))
+  }
+
+  // Se acessar advconecta.com.br em rotas do sistema, bloquear homepage
+  // (força usar app.advconecta.com.br para sistema)
+  if (!hostname.startsWith('app.') && !hostname.includes('duckdns')) {
+    const systemPaths = ['/dashboard', '/organization-dashboard', '/admin']
+    if (systemPaths.some(path => pathname.startsWith(path))) {
+      // Permitir acesso (sistema funciona em ambos domínios)
+      // Ou pode redirecionar para app.advconecta.com.br se quiser forçar
+    }
+  }
 
   // Rotas públicas que não precisam de autenticação
   const publicPaths = ['/login', '/register', '/api/auth/login', '/api/auth/register']
@@ -16,6 +32,11 @@ export async function middleware(request: NextRequest) {
 
   // Rotas de API webhook (não precisam de token JWT)
   if (pathname.startsWith('/api/webhooks/')) {
+    return NextResponse.next()
+  }
+
+  // Rotas de cron jobs (usam CRON_SECRET em vez de JWT)
+  if (pathname.startsWith('/api/cron/')) {
     return NextResponse.next()
   }
 

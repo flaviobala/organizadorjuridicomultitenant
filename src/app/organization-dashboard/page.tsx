@@ -309,30 +309,66 @@ export default function OrganizationDashboard() {
       )}
 
       {/* Header */}
-      <div className="bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 shadow-lg">
+      <div className="bg-gradient-to-r from-slate-100 via-gray-100 to-slate-100 shadow-lg border-b-2 border-gray-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           <div className="flex justify-between items-center">
             <div>
               <div className="flex items-center gap-3 mb-2">
-                {stats?.logo_url ? (
-                  <img src={stats.logo_url} alt="Logo da Organização" className="h-12 w-12 object-contain rounded-md bg-white p-1 shadow-md" />
-                ) : (
-                  <span className="text-4xl">🏢</span>
-                )}
-                <h1 className="text-3xl font-bold text-white">{stats?.name || 'Organização'}</h1>
+                {/* Logo clicável para upload */}
+                <div className="relative group">
+                  <label htmlFor="logo-upload-header" className="cursor-pointer block">
+                    <div className="h-12 w-12 rounded-md bg-white p-1 shadow-md overflow-hidden transition-all group-hover:ring-2 group-hover:ring-blue-400">
+                      {logoPreview ? (
+                        <img src={logoPreview} alt="Pré-visualização" className="h-full w-full object-contain" />
+                      ) : stats?.logo_url ? (
+                        <img src={stats.logo_url} alt="Logo da Organização" className="h-full w-full object-contain" />
+                      ) : (
+                        <span className="text-4xl flex items-center justify-center h-full">🏢</span>
+                      )}
+                    </div>
+                  </label>
+                  <input
+                    id="logo-upload-header"
+                    type="file"
+                    accept="image/png, image/jpeg, image/svg+xml"
+                    onChange={handleFileChange}
+                    className="hidden"
+                  />
+                </div>
+                <div>
+                  <h1 className="text-3xl font-bold text-gray-800">{stats?.name || 'Organização'}</h1>
+                  {selectedFile && (
+                    <div className="flex items-center gap-2 mt-1">
+                      <span className="text-xs text-gray-600 truncate max-w-[200px]">{selectedFile.name}</span>
+                      <button
+                        onClick={handleLogoUpload}
+                        disabled={uploadingLogo}
+                        className="px-2 py-1 bg-green-600 text-white rounded text-xs hover:bg-green-700 disabled:bg-gray-400"
+                      >
+                        {uploadingLogo ? '...' : 'Salvar'}
+                      </button>
+                      <button
+                        onClick={() => { setSelectedFile(null); setLogoPreview(null); }}
+                        className="px-2 py-1 bg-gray-300 text-gray-700 rounded text-xs hover:bg-gray-400"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  )}
+                </div>
               </div>
               <div className="flex items-center gap-3 ml-14">
                 <span className={`px-3 py-1 text-xs font-semibold rounded-full ${getPlanBadgeColor(stats?.planType || 'basic')}`}>
                   📦 Plano {stats?.planType?.toUpperCase()}
                 </span>
-                <span className="text-sm text-blue-100">
-                  Status: <span className="font-semibold text-white">{stats?.subscriptionStatus}</span>
+                <span className="text-sm text-gray-600">
+                  Status: <span className="font-semibold text-gray-800">{stats?.subscriptionStatus}</span>
                 </span>
               </div>
             </div>
             <button
               onClick={() => router.push('/dashboard')}
-              className="px-6 py-3 bg-white text-blue-700 rounded-lg hover:bg-blue-50 font-semibold shadow-lg transition-all hover:scale-105"
+              className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-semibold shadow-lg transition-all hover:scale-105"
             >
               ← Voltar ao Dashboard
             </button>
@@ -382,59 +418,6 @@ export default function OrganizationDashboard() {
         {/* Tab: Visão Geral */}
         {activeTab === 'overview' && stats && (
           <div className="space-y-8">
-            {/* Seção da Logo */}
-            <div className="bg-white rounded-xl shadow-lg p-6 border-l-4 border-blue-500">
-                <div className="flex flex-col sm:flex-row items-center gap-6">
-
-                    <div className="w-32 h-32 sm:w-36 sm:h-36 bg-gray-100 rounded-full flex items-center justify-center border-4 border-white shadow-md flex-shrink-0">
-                        {logoPreview ? (
-                            <img src={logoPreview} alt="Pré-visualização da Logo" className="w-full h-full object-contain rounded-full" />
-                        ) : stats.logo_url ? (
-                            <img src={stats.logo_url} alt="Logo da Organização" className="w-full h-full object-contain rounded-full" />
-                        ) : (
-                            <span className="text-gray-500 text-4xl">🏢</span>
-                        )}
-                    </div>
-
-
-                    <div className="flex-1 text-center sm:text-left">
-                        <h3 className="text-xl font-bold text-gray-800">Logo da Organização</h3>
-                        <p className="text-sm text-gray-600 mt-1 mb-4">
-                            Uma boa imagem ajuda a personalizar o ambiente para seus usuários.
-                            <br/>
-                            Formatos: PNG, JPG, SVG. Tamanho máx: 2MB.
-                        </p>
-                        <div className="flex flex-col sm:flex-row items-center gap-4">
-                            <label htmlFor="logo-upload" className="cursor-pointer px-5 py-2.5 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 font-semibold text-sm transition-all">
-                                Trocar Imagem
-                            </label>
-                            <input
-                                id="logo-upload"
-                                type="file"
-                                accept="image/png, image/jpeg, image/svg+xml"
-                                onChange={handleFileChange}
-                                className="hidden"
-                            />
-                            {selectedFile && (
-                                <div className="flex items-center gap-4">
-                                    <span className="text-sm text-gray-700 max-w-xs truncate">{selectedFile.name}</span>
-                                    <button
-                                        onClick={handleLogoUpload}
-                                        disabled={uploadingLogo}
-                                        className="px-5 py-2.5 bg-green-600 text-white rounded-lg hover:bg-green-700 font-semibold shadow-md transition-all disabled:bg-gray-400 disabled:cursor-not-allowed text-sm"
-                                    >
-                                        {uploadingLogo ? 'Enviando...' : 'Salvar'}
-                                    </button>
-                                </div>
-                            )}
-                        </div>
-                         {logoUploadError && <p className="text-sm text-red-600 mt-3">{logoUploadError}</p>}
-                         {logoUploadSuccess && <p className="text-sm text-green-600 mt-3">✅ Logo atualizado com sucesso!</p>}
-                         {uploadingLogo && <p className="text-sm text-blue-600 mt-3 animate-pulse">Enviando imagem...</p>}
-                    </div>
-                </div>
-            </div>
-
             {/* Stats Cards */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
               <div className="bg-gradient-to-br from-blue-500 to-blue-700 rounded-xl shadow-lg p-6 text-white transform hover:scale-105 transition-transform">
