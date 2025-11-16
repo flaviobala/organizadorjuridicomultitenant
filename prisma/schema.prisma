@@ -19,29 +19,36 @@ enum UserRole {
 }
 
 enum PlanType {
+  free
   basic
   pro
-  enterprise
-  trialing
 }
 
 enum SubscriptionStatus {
   active
   past_due
   canceled
-  trialing
+  free_trial
 }
 
 model Organization {
   id                         Int                @id @default(autoincrement())
   name                       String
-  planType                   PlanType           @default(trialing) @map("plan_type")
-  subscriptionStatus         SubscriptionStatus @default(trialing) @map("subscription_status")
+  planType                   PlanType           @default(free) @map("plan_type")
+  subscriptionStatus         SubscriptionStatus @default(free_trial) @map("subscription_status")
   documentProcessedCount     Int                @default(0) @map("document_processed_count")
   aiTokenCount               Int                @default(0) @map("ai_token_count")
   stripeCustomerId           String?            @unique @map("stripe_customer_id")
   mercadoPagoSubscriptionId  String?            @unique @map("mercadopago_subscription_id")
   subscriptionDueDate        DateTime?          @map("subscription_due_date")
+  freeTrialEndsAt            DateTime?          @map("free_trial_ends_at")
+
+  // Dados do cartão de crédito (tokenizado)
+  paymentCardToken           String?            @map("payment_card_token")
+  cardLastFourDigits         String?            @map("card_last_four_digits")
+  cardHolderName             String?            @map("card_holder_name")
+  cardHolderCpf              String?            @map("card_holder_cpf")
+  cardBrand                  String?            @map("card_brand")
 
   // Novos campos de contato e informações
   contactName                String?            @map("contact_name")

@@ -5,10 +5,11 @@ import { prisma } from './prisma'
  * Limites por tipo de plano
  */
 export const PLAN_LIMITS = {
-  trialing: {
+  free: {
     maxDocuments: 50,
     maxTokens: 100000,
     maxUsers: 2,
+    trialDays: 3, // 3 dias de teste
     features: ['basic_processing', 'ai_categorization']
   },
   basic: {
@@ -22,12 +23,6 @@ export const PLAN_LIMITS = {
     maxTokens: 10000000,
     maxUsers: 20,
     features: ['basic_processing', 'ai_categorization', 'batch_upload', 'advanced_ai', 'priority_support']
-  },
-  enterprise: {
-    maxDocuments: -1, // ilimitado
-    maxTokens: -1,    // ilimitado
-    maxUsers: -1,     // ilimitado
-    features: ['basic_processing', 'ai_categorization', 'batch_upload', 'advanced_ai', 'priority_support', 'custom_integration', 'dedicated_support']
   }
 } as const
 
@@ -68,6 +63,17 @@ export async function checkPlanLimits(organizationId: number): Promise<PlanCheck
       return {
         allowed: false,
         reason: 'Organização não encontrada'
+      }
+    }
+
+    // Verificar se o período FREE expirou
+    if (organization.planType === 'free' && organization.freeTrialEndsAt) {
+      const now = new Date()
+      if (now > organization.freeTrialEndsAt) {
+        return {
+          allowed: false,
+          reason: 'Seu período de teste de 3 dias expirou. Faça upgrade para continuar usando o sistema.'
+        }
       }
     }
 

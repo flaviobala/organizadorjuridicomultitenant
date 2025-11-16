@@ -14,6 +14,9 @@ const nextConfig: NextConfig = {
     ],
   },
 
+  // ✅ Permitir cross-origin em desenvolvimento
+  allowedDevOrigins: ['organizadoradv.duckdns.org'],
+
   // ✅ Ignorar erros de ESLint e TypeScript em produção
   eslint: {
     ignoreDuringBuilds: true,

@@ -34,8 +34,9 @@ async function main() {
       systemOrg = await prisma.organization.create({
         data: {
           name: 'Sistema - Administração',
-          planType: 'enterprise',
-          subscriptionStatus: 'active'
+          planType: 'pro', // Super admin usa plano PRO sem limitações
+          subscriptionStatus: 'active',
+          freeTrialEndsAt: null // Sem expiração para super admin
         }
       })
       console.log('✅ Organização criada: ID', systemOrg.id, '\n')

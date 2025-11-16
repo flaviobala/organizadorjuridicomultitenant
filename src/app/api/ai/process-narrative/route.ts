@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { requireAuth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { OpenAIService } from '@/lib/openai' // Assumindo que esta classe não acessa o 'prisma'
-import { incrementTokenCount } from '@/lib/plan-limits'
+import { incrementTokenCount, checkPlanLimits } from '@/lib/plan-limits'
 import { z } from 'zod'
 
 const processNarrativeSchema = z.object({
@@ -20,6 +20,15 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: auth.error }, { status: 401 })
     }
     // auth.user agora contém { id, email, name, organizationId }
+
+    // ✅ Verificar limites do plano e trial expirado
+    const limitCheck = await checkPlanLimits(auth.user.organizationId)
+    if (!limitCheck.allowed) {
+      return NextResponse.json({
+        success: false,
+        error: limitCheck.reason
+      }, { status: 403 })
+    }
 
     const body = await request.json()
     

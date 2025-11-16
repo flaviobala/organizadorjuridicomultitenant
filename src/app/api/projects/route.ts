@@ -2,6 +2,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireAuth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { checkPlanLimits } from '@/lib/plan-limits'
 import { z } from 'zod'
 
 const createProjectSchema = z.object({
@@ -81,8 +82,17 @@ export async function POST(request: NextRequest) {
     if (!auth.success || !auth.user) {
       return NextResponse.json({ error: auth.error }, { status: 401 })
     }
-    
+
     // O auth.user agora contém: { id, email, name, organizationId }
+
+    // ✅ Verificar limites do plano e trial expirado
+    const limitCheck = await checkPlanLimits(auth.user.organizationId)
+    if (!limitCheck.allowed) {
+      return NextResponse.json({
+        success: false,
+        error: limitCheck.reason
+      }, { status: 403 })
+    }
 
     const body = await request.json()
     

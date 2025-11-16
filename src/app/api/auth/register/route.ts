@@ -7,6 +7,11 @@ const registerSchema = z.object({
   email: z.string().email('Email inválido'),
   password: z.string().min(6, 'Senha deve ter pelo menos 6 caracteres'),
   name: z.string().min(2, 'Nome deve ter pelo menos 2 caracteres'),
+  // Dados opcionais do cartão (para plano FREE)
+  cardToken: z.string().optional(),
+  cardLastFourDigits: z.string().optional(),
+  cardHolderName: z.string().optional(),
+  cardHolderCpf: z.string().optional(),
 })
 
 export async function POST(request: NextRequest) {
@@ -23,10 +28,15 @@ export async function POST(request: NextRequest) {
       }, { status: 400 })
     }
 
-    const { email, password, name } = validation.data
+    const { email, password, name, cardToken, cardLastFourDigits, cardHolderName, cardHolderCpf } = validation.data
 
-    // Registrar usuário
-    const result = await registerUser(email, password, name)
+    // Registrar usuário com dados do cartão (se fornecidos)
+    const result = await registerUser(email, password, name, {
+      cardToken,
+      cardLastFourDigits,
+      cardHolderName,
+      cardHolderCpf
+    })
 
     if (!result.success) {
       return NextResponse.json(result, { status: 400 })
