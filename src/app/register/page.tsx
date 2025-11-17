@@ -141,8 +141,8 @@ export default function RegisterPage() {
           localStorage.setItem('token', data.token)
         }
 
-        // Redirecionar para o dashboard
-        router.push('/organization-dashboard')
+        // Redirecionar para app.advconecta.com.br
+        window.location.href = 'https://app.advconecta.com.br/organization-dashboard'
       } catch (err: any) {
         console.error('Erro:', err)
         setError(err.message || 'Erro ao conectar com o servidor')

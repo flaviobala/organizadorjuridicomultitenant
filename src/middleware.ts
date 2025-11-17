@@ -14,13 +14,13 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL('/login', request.url))
   }
 
-  // Se acessar advconecta.com.br em rotas do sistema, bloquear homepage
-  // (força usar app.advconecta.com.br para sistema)
+  // Se acessar advconecta.com.br em rotas do sistema, redirecionar para app.advconecta.com.br
   if (!hostname.startsWith('app.') && !hostname.includes('duckdns')) {
     const systemPaths = ['/dashboard', '/organization-dashboard', '/admin']
     if (systemPaths.some(path => pathname.startsWith(path))) {
-      // Permitir acesso (sistema funciona em ambos domínios)
-      // Ou pode redirecionar para app.advconecta.com.br se quiser forçar
+      const appUrl = new URL(request.url)
+      appUrl.hostname = 'app.advconecta.com.br'
+      return NextResponse.redirect(appUrl)
     }
   }
 
