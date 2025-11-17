@@ -41,8 +41,7 @@ export default function SubscriptionCard() {
     const plans: Record<string, string> = {
       trialing: 'Trial',
       basic: 'Basic',
-      pro: 'Pro',
-      enterprise: 'Enterprise'
+      pro: 'Pro'
     }
     return plans[planType] || planType
   }

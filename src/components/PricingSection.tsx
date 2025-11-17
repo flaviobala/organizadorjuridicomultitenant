@@ -99,7 +99,7 @@ export default function PricingSection() {
                 </ul>
 
                 <Link
-                  href="/register"
+                  href={plan.id === 'free' ? '/register' : `/register?plan=${plan.id}`}
                   className={`w-full py-3 px-6 rounded-lg font-semibold transition-colors text-center block ${
                     plan.highlighted
                       ? 'bg-blue-600 text-white hover:bg-blue-700'

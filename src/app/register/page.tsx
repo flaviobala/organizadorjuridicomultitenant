@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import Script from 'next/script'
 
@@ -14,6 +14,9 @@ declare global {
 
 export default function RegisterPage() {
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const selectedPlan = searchParams.get('plan') || 'free'
+
   const [formData, setFormData] = useState({
     // Dados pessoais
     name: '',
@@ -32,6 +35,33 @@ export default function RegisterPage() {
   const [loading, setLoading] = useState(false)
   const [mpLoaded, setMpLoaded] = useState(false)
   const [step, setStep] = useState(1) // 1: dados pessoais, 2: dados do cartão
+
+  // Informações dos planos
+  const PLAN_INFO = {
+    free: {
+      name: 'FREE',
+      price: 'Grátis',
+      description: '5 dias grátis. Cancele quando quiser.',
+      features: ['50 documentos', '100k tokens IA', 'Até 2 usuários', '5 dias de teste grátis'],
+      requiresCard: true
+    },
+    basic: {
+      name: 'BASIC',
+      price: 'R$ 15,00/mês',
+      description: 'Plano Basic - Ideal para pequenas equipes',
+      features: ['500 documentos', '1M tokens IA', 'Até 5 usuários', 'Upload em lote'],
+      requiresCard: false
+    },
+    pro: {
+      name: 'PRO',
+      price: 'R$ 25,00/mês',
+      description: 'Plano Pro - Recursos avançados',
+      features: ['5.000 documentos', '10M tokens IA', 'Até 20 usuários', 'IA Avançada', 'Suporte prioritário'],
+      requiresCard: false
+    }
+  }
+
+  const currentPlan = PLAN_INFO[selectedPlan as keyof typeof PLAN_INFO] || PLAN_INFO.free
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -54,7 +84,74 @@ export default function RegisterPage() {
         return
       }
 
-      // Ir para o próximo step (dados do cartão)
+      // Para planos pagos (basic/pro), criar assinatura PRIMEIRO, depois criar conta
+      if (!currentPlan.requiresCard) {
+        setLoading(true)
+        try {
+          // PASSO 1: Criar assinatura no MercadoPago PRIMEIRO (antes de criar conta)
+          const subscriptionResponse = await fetch('/api/billing/mercadopago/create-subscription', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              planType: selectedPlan,
+              email: formData.email
+            })
+          })
+
+          const subscriptionData = await subscriptionResponse.json()
+
+          if (!subscriptionResponse.ok || !subscriptionData.success) {
+            setError(subscriptionData.error || 'Erro ao criar assinatura no MercadoPago')
+            setLoading(false)
+            return
+          }
+
+          // PASSO 2: Só criar conta se a assinatura foi criada com sucesso
+          const response = await fetch('/api/auth/register', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              name: formData.name,
+              email: formData.email,
+              password: formData.password,
+              mercadoPagoSubscriptionId: subscriptionData.subscriptionId // Salvar ID da assinatura
+            })
+          })
+
+          const data = await response.json()
+
+          if (!response.ok) {
+            setError(data.message || 'Erro ao criar conta')
+            setLoading(false)
+            return
+          }
+
+          // Salvar token no localStorage
+          if (data.token) {
+            localStorage.setItem('token', data.token)
+          }
+
+          // PASSO 3: Redirecionar para checkout do MercadoPago
+          if (subscriptionData.checkoutUrl) {
+            window.location.href = subscriptionData.checkoutUrl
+          } else {
+            setError('Erro: URL de checkout não encontrada')
+            setLoading(false)
+          }
+
+        } catch (err: any) {
+          console.error('Erro:', err)
+          setError(err.message || 'Erro ao conectar com o servidor')
+          setLoading(false)
+        }
+        return
+      }
+
+      // Para plano FREE, ir para o próximo step (dados do cartão)
       setStep(2)
       return
     }
@@ -195,64 +292,59 @@ export default function RegisterPage() {
           {/* Header */}
           <div className="text-center">
             <h2 className="text-3xl font-bold text-gray-900">
-              {step === 1 ? 'Comece seu Teste Grátis' : 'Dados do Cartão de Crédito'}
+              {step === 1
+                ? (currentPlan.requiresCard ? 'Comece seu Teste Grátis' : `Assinar Plano ${currentPlan.name}`)
+                : 'Dados do Cartão de Crédito'
+              }
             </h2>
             <p className="mt-2 text-sm text-gray-600">
               {step === 1
-                ? '5 dias grátis. Cancele quando quiser.'
+                ? currentPlan.description
                 : 'Necessário para ativar seu teste. Não cobraremos agora.'
               }
             </p>
           </div>
 
-          {/* Progress Indicator */}
-          <div className="flex items-center justify-center space-x-2">
-            <div className={`w-3 h-3 rounded-full ${step === 1 ? 'bg-blue-600' : 'bg-green-500'}`} />
-            <div className="w-12 h-1 bg-gray-300">
-              <div className={`h-full bg-blue-600 transition-all duration-300 ${step === 2 ? 'w-full' : 'w-0'}`} />
+          {/* Progress Indicator - Only for FREE plan */}
+          {currentPlan.requiresCard && (
+            <div className="flex items-center justify-center space-x-2">
+              <div className={`w-3 h-3 rounded-full ${step === 1 ? 'bg-blue-600' : 'bg-green-500'}`} />
+              <div className="w-12 h-1 bg-gray-300">
+                <div className={`h-full bg-blue-600 transition-all duration-300 ${step === 2 ? 'w-full' : 'w-0'}`} />
+              </div>
+              <div className={`w-3 h-3 rounded-full ${step === 2 ? 'bg-blue-600' : 'bg-gray-300'}`} />
             </div>
-            <div className={`w-3 h-3 rounded-full ${step === 2 ? 'bg-blue-600' : 'bg-gray-300'}`} />
-          </div>
+          )}
 
-          {/* FREE Plan Badge */}
-          <div className="bg-green-50 border-2 border-green-200 rounded-lg p-4">
+          {/* Plan Badge */}
+          <div className={`${selectedPlan === 'free' ? 'bg-green-50 border-2 border-green-200' : selectedPlan === 'pro' ? 'bg-blue-50 border-2 border-blue-200' : 'bg-gray-50 border-2 border-gray-200'} rounded-lg p-4`}>
             <div className="flex items-center justify-between">
               <div>
-                <h3 className="text-lg font-semibold text-green-900">Plano FREE</h3>
-                <p className="text-sm text-green-700 mt-1">O que está incluído:</p>
+                <h3 className={`text-lg font-semibold ${selectedPlan === 'free' ? 'text-green-900' : selectedPlan === 'pro' ? 'text-blue-900' : 'text-gray-900'}`}>
+                  Plano {currentPlan.name}
+                </h3>
+                <p className={`text-sm ${selectedPlan === 'free' ? 'text-green-700' : selectedPlan === 'pro' ? 'text-blue-700' : 'text-gray-700'} mt-1`}>
+                  O que está incluído:
+                </p>
               </div>
-              <div className="text-2xl font-bold text-green-600">Grátis</div>
+              <div className={`text-2xl font-bold ${selectedPlan === 'free' ? 'text-green-600' : selectedPlan === 'pro' ? 'text-blue-600' : 'text-gray-600'}`}>
+                {currentPlan.price}
+              </div>
             </div>
-            <ul className="mt-3 space-y-2 text-sm text-green-800">
-              <li className="flex items-center">
-                <svg className="w-4 h-4 mr-2 text-green-600" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                </svg>
-                50 documentos
-              </li>
-              <li className="flex items-center">
-                <svg className="w-4 h-4 mr-2 text-green-600" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                </svg>
-                100k tokens IA
-              </li>
-              <li className="flex items-center">
-                <svg className="w-4 h-4 mr-2 text-green-600" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                </svg>
-                Até 2 usuários
-              </li>
-              <li className="flex items-center">
-                <svg className="w-4 h-4 mr-2 text-green-600" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                </svg>
-                5 dias de teste grátis
-              </li>
+            <ul className={`mt-3 space-y-2 text-sm ${selectedPlan === 'free' ? 'text-green-800' : selectedPlan === 'pro' ? 'text-blue-800' : 'text-gray-800'}`}>
+              {currentPlan.features.map((feature, index) => (
+                <li key={index} className="flex items-center">
+                  <svg className={`w-4 h-4 mr-2 ${selectedPlan === 'free' ? 'text-green-600' : selectedPlan === 'pro' ? 'text-blue-600' : 'text-gray-600'}`} fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                  </svg>
+                  {feature}
+                </li>
+              ))}
             </ul>
           </div>
 
-          {/* Important Notice */}
-          {step === 2 && (
+          {/* Important Notice - Only for FREE plan with card */}
+          {step === 2 && currentPlan.requiresCard && (
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
               <div className="flex">
                 <svg className="w-5 h-5 text-blue-600 mr-2 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
@@ -263,6 +355,22 @@ export default function RegisterPage() {
                   <p className="mt-1">Para evitar abusos e garantir a continuidade do serviço após o período de teste.
                   Você <strong>não será cobrado agora</strong>. Após 5 dias, enviaremos um aviso e cobraremos automaticamente o plano escolhido,
                   a menos que você cancele antes.</p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Payment Notice - For paid plans */}
+          {!currentPlan.requiresCard && step === 1 && (
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+              <div className="flex">
+                <svg className="w-5 h-5 text-blue-600 mr-2 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                </svg>
+                <div className="text-sm text-blue-800">
+                  <strong>Como funciona?</strong>
+                  <p className="mt-1">Após criar sua conta, você será redirecionado para o checkout do MercadoPago para completar o pagamento.
+                  Você poderá pagar com cartão de crédito, débito, PIX ou boleto bancário.</p>
                 </div>
               </div>
             </div>
@@ -476,12 +584,12 @@ export default function RegisterPage() {
                         <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                         <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                       </svg>
-                      {step === 1 ? 'Processando...' : 'Criando conta...'}
+                      {step === 1 ? (currentPlan.requiresCard ? 'Processando...' : 'Criando conta e assinatura...') : 'Criando conta...'}
                     </span>
                   ) : step === 2 && !mpLoaded ? (
                     'Carregando...'
                   ) : (
-                    step === 1 ? 'Continuar' : 'Começar teste grátis'
+                    step === 1 ? (currentPlan.requiresCard ? 'Continuar' : 'Ir para pagamento') : 'Começar teste grátis'
                   )}
                 </button>
               </div>

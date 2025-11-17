@@ -16,9 +16,8 @@ const preApprovalClient = new PreApproval(client)
 
 // Definir preços dos planos (em reais) - VALORES DE TESTE
 const PLAN_PRICES = {
-  basic: 15.00,         
-  pro: 20.00,           
-  enterprise: 199.90   // R$ 199,90/mês
+  basic: 15.00,
+  pro: 25.00
 }
 
 /**
@@ -31,7 +30,7 @@ export async function POST(request: NextRequest) {
     const { planType, email } = body
 
     // Validar plano
-    if (!['basic', 'pro', 'enterprise'].includes(planType)) {
+    if (!['basic', 'pro'].includes(planType)) {
       return NextResponse.json({
         success: false,
         error: 'Plano inválido'
@@ -41,10 +40,16 @@ export async function POST(request: NextRequest) {
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL || request.nextUrl.origin || 'http://localhost:3000'
     const planPrice = PLAN_PRICES[planType as keyof typeof PLAN_PRICES]
 
+    // Em desenvolvimento, usar URL de produção para back_url (MercadoPago não aceita localhost)
+    const backUrl = baseUrl.includes('localhost')
+      ? 'https://app.advconecta.com.br/payment-success'
+      : `${baseUrl}/payment-success`
+
     console.log('📝 [MP] Criando assinatura:', {
       planType,
       planPrice,
-      baseUrl
+      baseUrl,
+      backUrl
     })
 
     // Criar assinatura
@@ -57,8 +62,8 @@ export async function POST(request: NextRequest) {
           transaction_amount: planPrice,
           currency_id: 'BRL'
         },
-        back_url: `${baseUrl}/payment-success`,
-        // Não necessita de email do pagador no momento de criar a assinatura
+        back_url: backUrl,
+        payer_email: email, // Email do pagador é obrigatório
         external_reference: planType // Armazenar plano selecionado
       }
     })

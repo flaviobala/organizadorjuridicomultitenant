@@ -39,7 +39,7 @@ const PLAN_INFO: Record<string, { name: string, price: string, limits: PlanLimit
   },
   basic: {
     name: 'Basic',
-    price: 'R$ 1/mês',
+    price: 'R$ 15/mês',
     limits: {
       maxDocuments: 500,
       maxTokens: 1000000,
@@ -49,22 +49,12 @@ const PLAN_INFO: Record<string, { name: string, price: string, limits: PlanLimit
   },
   pro: {
     name: 'Pro',
-    price: 'R$ 2/mês',
+    price: 'R$ 25/mês',
     limits: {
       maxDocuments: 5000,
       maxTokens: 10000000,
       maxUsers: 20,
       features: ['Processamento básico', 'Categorização IA', 'Upload em lote', 'IA Avançada', 'Suporte prioritário']
-    }
-  },
-  enterprise: {
-    name: 'Enterprise',
-    price: 'R$ 3/mês',
-    limits: {
-      maxDocuments: -1,
-      maxTokens: -1,
-      maxUsers: -1,
-      features: ['Tudo do Pro', 'Recursos ilimitados', 'Integração customizada', 'Suporte dedicado']
     }
   }
 }
