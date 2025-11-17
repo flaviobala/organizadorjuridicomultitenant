@@ -1327,14 +1327,20 @@ export default function UploadDocumentsPage({
 
         setUploadProgress(prev => ({ ...prev, [fileKey]: 25 }))
 
+        // ✅ Timeout de 5 minutos para PDFs grandes com muitas páginas
+        const controller = new AbortController()
+        const timeoutId = setTimeout(() => controller.abort(), 300000) // 5 minutos
+
         const response = await fetch('/api/documents/upload', {
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${token}`
           },
           body: formData,
+          signal: controller.signal
         })
 
+        clearTimeout(timeoutId)
         setUploadProgress(prev => ({ ...prev, [fileKey]: 75 }))
 
         const result = await response.json()
@@ -1372,7 +1378,15 @@ export default function UploadDocumentsPage({
       loadProjectAndDocuments()
 
     } catch (error) {
-      setMessage({ type: 'error', text: error instanceof Error ? error.message : 'Erro no upload' })
+      // Detectar timeout do AbortController
+      if (error instanceof Error && error.name === 'AbortError') {
+        setMessage({
+          type: 'error',
+          text: 'Timeout: O processamento está demorando mais que 5 minutos. O servidor continua processando em background. Aguarde alguns minutos e atualize a página.'
+        })
+      } else {
+        setMessage({ type: 'error', text: error instanceof Error ? error.message : 'Erro no upload' })
+      }
     } finally {
       setIsUploading(false)
       setUploadProgress({})
