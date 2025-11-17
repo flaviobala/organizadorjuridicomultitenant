@@ -11,7 +11,7 @@ export default function NewOrganizationPage() {
   const [createdData, setCreatedData] = useState<any>(null)
   const [formData, setFormData] = useState({
     name: '',
-    planType: 'trialing',
+    planType: 'free',
     userName: '',
     email: '',
     password: '',
@@ -296,7 +296,7 @@ export default function NewOrganizationPage() {
                 onChange={handleChange}
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               >
-                <option value="trialing">Trialing (50 docs, 100K tokens)</option>
+                <option value="free">Free (50 docs, 100K tokens)</option>
                 <option value="basic">Basic (500 docs, 1M tokens)</option>
                 <option value="pro">Pro (5K docs, 10M tokens)</option>
                 <option value="enterprise">Enterprise (Ilimitado)</option>
