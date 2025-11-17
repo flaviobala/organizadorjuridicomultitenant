@@ -14,9 +14,9 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL('/login', request.url))
   }
 
-  // Se acessar advconecta.com.br em rotas do sistema, redirecionar para app.advconecta.com.br
+  // Se acessar advconecta.com.br em rotas do sistema ou login/register, redirecionar para app.advconecta.com.br
   if (!hostname.startsWith('app.') && !hostname.includes('duckdns')) {
-    const systemPaths = ['/dashboard', '/organization-dashboard', '/admin']
+    const systemPaths = ['/dashboard', '/organization-dashboard', '/admin', '/login', '/register']
     if (systemPaths.some(path => pathname.startsWith(path))) {
       const appUrl = new URL(request.url)
       appUrl.hostname = 'app.advconecta.com.br'

@@ -45,12 +45,11 @@ export default function LoginPage() {
         localStorage.setItem('user', JSON.stringify(result.user))
         setMessage({ type: 'success', text: 'Login realizado com sucesso!' })
 
-        // Redirecionar sempre para app.advconecta.com.br
+        // Redirecionar (middleware vai mandar para app.advconecta.com.br se necessário)
         const path = result.user.role === 'super_admin' ? '/admin' : '/dashboard'
-        const appUrl = `https://app.advconecta.com.br${path}`
 
         setTimeout(() => {
-          window.location.href = appUrl
+          router.push(path)
         }, 1000)
       } else {
         setMessage({ type: 'error', text: result.message || 'Erro no login' })
