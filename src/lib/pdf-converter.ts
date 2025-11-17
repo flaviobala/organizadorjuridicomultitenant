@@ -342,37 +342,49 @@ export class PDFConverter {
   }
 
   /**
-   * ✅ NOVO: Verifica se PDF deve ser processado em lotes
-   * Critérios: > 10MB OU > 50 páginas
+   * ✅ CORRIGIDO: Verifica se PDF deve ser processado em lotes
+   * Critérios: > 5 PÁGINAS (não pelo tamanho!)
    */
   private async shouldProcessInBatches(buffer: Buffer): Promise<{ useBatch: boolean, pageCount: number, skipOCR?: boolean }> {
     try {
       const fileSizeMB = buffer.length / (1024 * 1024)
+      console.log(`📊 Analisando PDF: ${fileSizeMB.toFixed(2)}MB`)
 
-      // Verificar tamanho do arquivo
-      if (fileSizeMB > 10) {
-        console.log(`📊 PDF grande: ${fileSizeMB.toFixed(2)}MB`)
+      // ✅ SEMPRE verificar número de páginas PRIMEIRO
+      try {
+        const pdfDoc = await PDFDocument.load(buffer, { ignoreEncryption: true })
+        const pageCount = pdfDoc.getPageCount()
 
-        // Verificar número de páginas
-        try {
-          const pdfDoc = await PDFDocument.load(buffer, { ignoreEncryption: true })
-          const pageCount = pdfDoc.getPageCount()
+        console.log(`📄 Número de páginas: ${pageCount}`)
 
-          console.log(`📄 Páginas: ${pageCount}`)
-
-          // ✅ ESTRATÉGIA: OCR apenas nas primeiras 30 páginas para PDFs muito grandes
+        // ✅ CORRIGIDO: Processar em lotes se tiver > 5 páginas (não importa o tamanho)
+        if (pageCount > 5) {
+          // PDFs muito grandes: limitar OCR às primeiras 30 páginas
           if (pageCount > 100) {
             console.warn(`⚠️ PDF com ${pageCount} páginas - OCR limitado às primeiras 30 páginas`)
             console.warn(`   💡 Processando apenas início do documento para categorização`)
-            return { useBatch: true, pageCount: 30 } // Processa só as primeiras 30 páginas
+            return { useBatch: true, pageCount: 30 }
           }
 
-          // Processar em lotes se > 10 páginas
-          if (pageCount > 10) {
-            return { useBatch: true, pageCount }
+          // PDFs grandes: limitar OCR às primeiras 50 páginas
+          if (pageCount > 50) {
+            console.warn(`⚠️ PDF com ${pageCount} páginas - OCR limitado às primeiras 50 páginas`)
+            return { useBatch: true, pageCount: 50 }
           }
-        } catch (pdfError) {
-          console.warn('⚠️ Erro ao verificar páginas do PDF:', pdfError)
+
+          console.log(`📦 PDF com ${pageCount} páginas - usando processamento em lotes`)
+          return { useBatch: true, pageCount }
+        }
+
+        console.log(`✅ PDF com ${pageCount} páginas - processamento direto`)
+        return { useBatch: false, pageCount }
+
+      } catch (pdfError) {
+        console.warn('⚠️ Erro ao verificar páginas do PDF:', pdfError)
+        // Fallback: usar tamanho do arquivo
+        if (fileSizeMB > 2) {
+          console.log('📦 Arquivo > 2MB sem páginas detectadas - usando lotes por segurança')
+          return { useBatch: true, pageCount: 10 } // Assume 10 páginas
         }
       }
 
@@ -384,8 +396,9 @@ export class PDFConverter {
   }
 
   /**
-   * ✅ NOVO: Processa PDFs grandes em lotes menores
+   * ✅ OTIMIZADO: Processa PDFs grandes em lotes menores
    * Divide em lotes de 3 páginas e processa com Elysium
+   * Timeout: 25s por lote + delay de 2s entre lotes
    */
   private async extractTextInBatches(buffer: Buffer, totalPages: number): Promise<ElysiumOCR> {
     const pagesPerBatch = 3 // ✅ BALANCEADO: 3 páginas por lote
@@ -395,7 +408,12 @@ export class PDFConverter {
       const pdfDoc = await PDFDocument.load(buffer, { ignoreEncryption: true })
       const batchCount = Math.ceil(totalPages / pagesPerBatch)
 
-      console.log(`📦 Processando ${totalPages} páginas em ${batchCount} lotes...`)
+      console.log(`📦 ===== PROCESSAMENTO EM LOTES =====`)
+      console.log(`📦 Total de páginas: ${totalPages}`)
+      console.log(`📦 Páginas por lote: ${pagesPerBatch}`)
+      console.log(`📦 Total de lotes: ${batchCount}`)
+      console.log(`📦 Tempo estimado: ~${(batchCount * 27 / 60).toFixed(1)} minutos`)
+      console.log(`📦 ====================================`)
 
       for (let i = 0; i < totalPages; i += pagesPerBatch) {
         const endPage = Math.min(i + pagesPerBatch, totalPages)
@@ -414,12 +432,13 @@ export class PDFConverter {
           const batchBytes = await batchPdf.save()
           const batchBuffer = Buffer.from(batchBytes)
 
-          // Processar lote com Elysium
+          // Processar lote com Elysium (timeout de 25s por lote)
           const batchBase64 = batchBuffer.toString('base64')
           const response = await fetch('https://ocr.elysiumsistemas.com.br/api/upload', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ password: 'elysiumocr2025', file: batchBase64 })
+            body: JSON.stringify({ password: 'elysiumocr2025', file: batchBase64 }),
+            signal: AbortSignal.timeout(25000) // 25 segundos por lote de 3 páginas
           })
 
           // ✅ CORRIGIDO: Verificar status e conteúdo antes de parsear JSON
@@ -453,11 +472,21 @@ export class PDFConverter {
             console.log(`   ⚠️ Lote ${currentBatch}: Sem texto - data:`, data)
           }
 
-          // Delay para não sobrecarregar API (2 segundos entre páginas)
-          await new Promise(resolve => setTimeout(resolve, 2000))
+          // Delay para não sobrecarregar API (2 segundos entre lotes)
+          if (currentBatch < batchCount) {
+            console.log(`   ⏳ Aguardando 2s antes do próximo lote...`)
+            await new Promise(resolve => setTimeout(resolve, 2000))
+          }
 
         } catch (batchError) {
-          console.error(`   ❌ Erro no lote ${currentBatch}:`, batchError)
+          const isTimeout = batchError instanceof Error && (batchError.name === 'TimeoutError' || batchError.message.includes('timeout'))
+          if (isTimeout) {
+            console.error(`   ❌ Lote ${currentBatch}: TIMEOUT após 25s`)
+            console.warn(`   ⚠️ Pulando lote ${currentBatch} e continuando...`)
+          } else {
+            console.error(`   ❌ Erro no lote ${currentBatch}:`, batchError)
+          }
+          // Continua processamento dos outros lotes mesmo com erro
         }
       }
 

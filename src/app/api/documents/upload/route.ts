@@ -227,3 +227,8 @@ export async function POST(request: NextRequest) {
       }, { status: 500 })
   }
 }
+
+// ✅ Configurações para uploads grandes
+export const runtime = 'nodejs'
+export const maxDuration = 60 // 60 segundos (timeout)
+export const dynamic = 'force-dynamic'

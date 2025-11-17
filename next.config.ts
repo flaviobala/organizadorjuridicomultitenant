@@ -14,8 +14,12 @@ const nextConfig: NextConfig = {
     ],
   },
 
-  // ✅ Permitir cross-origin em desenvolvimento
-  allowedDevOrigins: ['organizadoradv.duckdns.org'],
+  // ✅ Permitir cross-origin em produção
+  allowedDevOrigins: [
+    'advconecta.com.br',
+    'app.advconecta.com.br',
+    'www.advconecta.com.br'
+  ],
 
   // ✅ Ignorar erros de ESLint e TypeScript em produção
   eslint: {
