@@ -20,6 +20,7 @@ export async function middleware(request: NextRequest) {
     if (systemPaths.some(path => pathname.startsWith(path))) {
       const appUrl = new URL(request.url)
       appUrl.hostname = 'app.advconecta.com.br'
+      appUrl.port = '' // Remove a porta para usar a porta padrão (80/443)
       return NextResponse.redirect(appUrl)
     }
   }
