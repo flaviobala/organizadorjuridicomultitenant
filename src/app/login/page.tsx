@@ -202,7 +202,7 @@ export default function LoginPage() {
             <div className="space-y-6">
               <div className="text-center">
                 <Link
-                  href="/"
+                  href="https://advconecta.com.br"
                   className="inline-flex items-center text-blue-600 hover:text-blue-700 transition-colors"
                 >
                   <ArrowLeft className="w-4 h-4 mr-2" />

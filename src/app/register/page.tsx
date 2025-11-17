@@ -507,7 +507,7 @@ export default function RegisterPage() {
 
           {/* Footer */}
           <div className="text-center">
-            <Link href="/" className="text-sm text-gray-600 hover:text-gray-900">
+            <Link href="https://advconecta.com.br" className="text-sm text-gray-600 hover:text-gray-900">
               ← Voltar para a página inicial
             </Link>
           </div>
