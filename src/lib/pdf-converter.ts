@@ -5,6 +5,8 @@ import { prisma } from './prisma'
 import OpenAI from 'openai'
 import type { DocumentAnalysis } from '@/types'
 import { trackTokens, estimateTokens } from './token-tracker'
+import { TesseractOCR } from './ocr-tesseract'
+import { DOCXProcessor } from './docx-processor'
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY!,
@@ -232,105 +234,47 @@ export class PDFConverter {
         }
       }
 
-      // ✅ MELHORADO: Retry automático com timeout adaptativo
-      const maxRetries = 3
-      let lastError: Error | null = null
-
-      for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      // ✅ PRIORIDADE 1: Processar arquivos DOCX/DOC
+      if (mimeType && (mimeType.includes('word') || mimeType.includes('document'))) {
         try {
-          console.log(`🔍 Tentativa ${attempt}/${maxRetries} - Usando API Elysium OCR...`, {
-            mimeType,
-            tamanho: this.formatFileSize(processedBuffer.length)
-          })
+          console.log('📄 [DOCX] Detectado arquivo Word, processando...')
+          const docxResult = await DOCXProcessor.extractText(processedBuffer)
 
-          // ✅ CORREÇÃO VERCEL: Timeout adaptativo respeitando limites do Vercel
-          const fileSizeMB = processedBuffer.length / (1024 * 1024)
-          // Vercel Hobby: 10s | Pro: 60s | Enterprise: 900s
-          // Configuração segura: Max 50s para deixar margem
-          const timeoutMs = Math.min(50000, Math.max(15000, fileSizeMB * 5000)) // Min 15s, Max 50s
-
-          console.log(`⏱️  Timeout configurado: ${(timeoutMs / 1000).toFixed(0)}s para ${fileSizeMB.toFixed(2)}MB`)
-
-          // Converter buffer para base64
-          const base64File = processedBuffer.toString('base64')
-
-          // Chamar API OCR
-          const body = JSON.stringify({
-            password: 'elysiumocr2025',
-            file: base64File
-          })
-
-          const response = await fetch('https://ocr.elysiumsistemas.com.br/api/upload', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: body,
-            signal: AbortSignal.timeout(timeoutMs)
-          })
-
-          if (!response.ok) {
-            console.error(`❌ Tentativa ${attempt}: Elysium retornou erro HTTP:`, response.status, response.statusText)
-            const errorText = await response.text()
-            console.error('❌ Resposta de erro:', errorText)
-
-            // Se for erro de servidor (5xx), tentar novamente
-            if (response.status >= 500 && attempt < maxRetries) {
-              console.log(`⏳ Aguardando ${attempt * 2}s antes de tentar novamente...`)
-              await new Promise(resolve => setTimeout(resolve, attempt * 2000))
-              continue
-            }
-
-            return {text: '', fileBase64: ''}
+          if (docxResult.text.length > 0) {
+            console.log(`✅ [DOCX] Texto extraído: ${docxResult.text.length} caracteres, ${docxResult.wordCount} palavras`)
+            return { text: docxResult.text, fileBase64: '' }
           }
-
-          const data = await response.json()
-
-          console.log('📥 Resposta da API Elysium:', {
-            success: data.success,
-            hasText: !!data.text,
-            textLength: data.text?.length || 0,
-            hasPdf: !!data.pdf,
-            pdfLength: data.pdf?.length || 0
-          })
-
-          // Verificar se a API retornou texto
-          if (data.success && data.text && typeof data.text === 'string') {
-            const extractedText = data.text.replace(/\s+/g, ' ').trim()
-
-            console.log(`✅ Sucesso na tentativa ${attempt}! Texto extraído:`, {
-              caracteres: extractedText.length,
-              preview: extractedText.substring(0, 200) + '...'
-            })
-
-            return {text: extractedText, fileBase64: data.pdf || ''}
-          }
-
-          console.warn(`⚠️ Tentativa ${attempt}: API OCR não retornou texto válido:`, {
-            dataSuccess: data.success,
-            dataKeys: Object.keys(data)
-          })
-
-          // Se não retornou texto mas a requisição foi bem-sucedida, não tentar novamente
-          return {text: '', fileBase64: ''}
-
-        } catch (error) {
-          lastError = error as Error
-          const isTimeout = error instanceof Error && (error.name === 'TimeoutError' || error.message.includes('timeout'))
-
-          console.error(`❌ Tentativa ${attempt}/${maxRetries} falhou:`, isTimeout ? 'TIMEOUT' : error)
-
-          if (attempt < maxRetries) {
-            const waitTime = attempt * 3000 // 3s, 6s, 9s...
-            console.log(`⏳ Aguardando ${waitTime/1000}s antes de tentar novamente...`)
-            await new Promise(resolve => setTimeout(resolve, waitTime))
-          }
+        } catch (docxError) {
+          console.warn('⚠️ [DOCX] Erro ao processar Word, tentando OCR:', docxError)
         }
       }
 
-      // Se chegou aqui, todas as tentativas falharam
-      console.error(`❌ Todas as ${maxRetries} tentativas falharam. Último erro:`, lastError?.message)
-      return {text: '', fileBase64: ''}
+      // ✅ PRIORIDADE 2: OCR Local com Tesseract
+      try {
+        console.log('🔍 [Tesseract] Iniciando OCR local...')
+
+        const tesseractResult = mimeType === 'application/pdf'
+          ? await TesseractOCR.extractFromPDF(processedBuffer)
+          : await TesseractOCR.extractFromImage(processedBuffer)
+
+        // Aceitar resultado se tiver texto razoável e confiança > 30%
+        if (tesseractResult.text.length > 10 && tesseractResult.confidence > 30) {
+          console.log(`✅ [Tesseract] OCR local bem-sucedido:`, {
+            caracteres: tesseractResult.text.length,
+            confianca: `${tesseractResult.confidence.toFixed(1)}%`,
+            tempo: `${tesseractResult.processingTime}ms`
+          })
+          return { text: tesseractResult.text, fileBase64: '' }
+        } else {
+          console.warn(`⚠️ [Tesseract] Resultado insuficiente (${tesseractResult.text.length} chars, ${tesseractResult.confidence.toFixed(1)}% confiança)`)
+          console.warn(`   💡 Sistema usará análise por nome de arquivo + ChatGPT`)
+          return { text: '', fileBase64: '' }
+        }
+      } catch (tesseractError) {
+        console.error('❌ [Tesseract] Erro no OCR local:', tesseractError)
+        console.warn('   💡 Sistema usará análise por nome de arquivo + ChatGPT')
+        return { text: '', fileBase64: '' }
+      }
 
     } catch (error) {
       console.error('❌ Erro crítico na API OCR:', error)
@@ -408,12 +352,12 @@ export class PDFConverter {
       const pdfDoc = await PDFDocument.load(buffer, { ignoreEncryption: true })
       const batchCount = Math.ceil(totalPages / pagesPerBatch)
 
-      console.log(`📦 ===== PROCESSAMENTO EM LOTES =====`)
+      console.log(`📦 ===== PROCESSAMENTO EM LOTES (Tesseract Local) =====`)
       console.log(`📦 Total de páginas: ${totalPages}`)
       console.log(`📦 Páginas por lote: ${pagesPerBatch}`)
       console.log(`📦 Total de lotes: ${batchCount}`)
-      console.log(`📦 Tempo estimado: ~${(batchCount * 27 / 60).toFixed(1)} minutos`)
-      console.log(`📦 ====================================`)
+      console.log(`📦 Tempo estimado: ~${(batchCount * 15 / 60).toFixed(1)} minutos (OCR local)`)
+      console.log(`📦 ======================================================`)
 
       for (let i = 0; i < totalPages; i += pagesPerBatch) {
         const endPage = Math.min(i + pagesPerBatch, totalPages)
@@ -432,60 +376,20 @@ export class PDFConverter {
           const batchBytes = await batchPdf.save()
           const batchBuffer = Buffer.from(batchBytes)
 
-          // Processar lote com Elysium (timeout de 25s por lote)
-          const batchBase64 = batchBuffer.toString('base64')
-          const response = await fetch('https://ocr.elysiumsistemas.com.br/api/upload', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ password: 'elysiumocr2025', file: batchBase64 }),
-            signal: AbortSignal.timeout(25000) // 25 segundos por lote de 3 páginas
-          })
+          // Processar lote com Tesseract local
+          console.log(`   🔍 [Tesseract] Processando lote ${currentBatch}...`)
+          const tesseractResult = await TesseractOCR.extractFromPDF(batchBuffer)
 
-          // ✅ CORRIGIDO: Verificar status e conteúdo antes de parsear JSON
-          if (!response.ok) {
-            console.error(`   ❌ Lote ${currentBatch}: HTTP ${response.status} - ${response.statusText}`)
-            console.warn(`   ⚠️ Pulando lote ${currentBatch} devido a erro na API`)
-            continue // Pula este lote e continua com o próximo
-          }
-
-          const responseText = await response.text()
-          console.log(`   📡 Resposta Elysium (${responseText.length} chars):`, responseText.substring(0, 200))
-
-          if (!responseText || responseText.trim().length === 0) {
-            console.error(`   ❌ Lote ${currentBatch}: Resposta vazia da API Elysium`)
-            continue
-          }
-
-          let data
-          try {
-            data = JSON.parse(responseText)
-          } catch (parseError) {
-            console.error(`   ❌ Lote ${currentBatch}: Erro ao parsear JSON:`, parseError)
-            console.error(`   📄 Resposta recebida:`, responseText)
-            continue
-          }
-
-          if (data.success && data.text) {
-            extractedTexts.push(data.text.replace(/\s+/g, ' ').trim())
-            console.log(`   ✅ Lote ${currentBatch}: ${data.text.length} caracteres`)
+          if (tesseractResult.text.length > 10) {
+            extractedTexts.push(tesseractResult.text.replace(/\s+/g, ' ').trim())
+            console.log(`   ✅ Lote ${currentBatch}: ${tesseractResult.text.length} caracteres (${tesseractResult.confidence.toFixed(1)}% confiança)`)
           } else {
-            console.log(`   ⚠️ Lote ${currentBatch}: Sem texto - data:`, data)
-          }
-
-          // Delay para não sobrecarregar API (2 segundos entre lotes)
-          if (currentBatch < batchCount) {
-            console.log(`   ⏳ Aguardando 2s antes do próximo lote...`)
-            await new Promise(resolve => setTimeout(resolve, 2000))
+            console.log(`   ⚠️ Lote ${currentBatch}: Texto insuficiente (${tesseractResult.text.length} chars)`)
           }
 
         } catch (batchError) {
-          const isTimeout = batchError instanceof Error && (batchError.name === 'TimeoutError' || batchError.message.includes('timeout'))
-          if (isTimeout) {
-            console.error(`   ❌ Lote ${currentBatch}: TIMEOUT após 25s`)
-            console.warn(`   ⚠️ Pulando lote ${currentBatch} e continuando...`)
-          } else {
-            console.error(`   ❌ Erro no lote ${currentBatch}:`, batchError)
-          }
+          console.error(`   ❌ Erro no lote ${currentBatch}:`, batchError)
+          console.warn(`   ⚠️ Pulando lote ${currentBatch} e continuando...`)
           // Continua processamento dos outros lotes mesmo com erro
         }
       }
