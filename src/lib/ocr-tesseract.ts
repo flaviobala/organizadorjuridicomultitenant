@@ -147,7 +147,7 @@ export class TesseractOCR {
 
   /**
    * Extrair texto nativo de PDF usando pdf-parse
-   * (para PDFs escaneados sem texto, retorna vazio)
+   * Configurado para lidar melhor com colunas, rodapés e cabeçalhos
    */
   static async extractFromPDF(buffer: Buffer): Promise<OCRResult> {
     const startTime = Date.now()
@@ -155,23 +155,76 @@ export class TesseractOCR {
     try {
       console.log('📄 [PDF-Parse] Processando PDF...')
 
-      // Extrair texto nativo do PDF (não faz OCR)
-      const data = await pdfParse(buffer)
+      // ✅ Configurações otimizadas para PDFs com layout complexo
+      const data = await pdfParse(buffer, {
+        // Limitar máximo de páginas a processar (evita timeout)
+        max: 100,
+
+        // Renderizar opções customizadas
+        pagerender: (pageData: any) => {
+          return pageData.getTextContent({
+            // ✅ Normalizar whitespace (evita espaços estranhos em colunas)
+            normalizeWhitespace: true,
+            // ✅ Desabilitar combinação de items (melhor para colunas)
+            disableCombineTextItems: false
+          }).then((textContent: any) => {
+            let text = ''
+            const items = textContent.items
+
+            // ✅ Ordenar items por posição Y (vertical) e depois X (horizontal)
+            // Isso ajuda a manter a ordem correta em layouts com colunas
+            const sortedItems = items.sort((a: any, b: any) => {
+              // Agrupar items na mesma linha (margem de 5 pixels)
+              const yDiff = Math.abs(a.transform[5] - b.transform[5])
+              if (yDiff < 5) {
+                // Mesma linha: ordenar por X (esquerda para direita)
+                return a.transform[4] - b.transform[4]
+              }
+              // Linhas diferentes: ordenar por Y (topo para baixo - PDF usa Y invertido)
+              return b.transform[5] - a.transform[5]
+            })
+
+            // Extrair texto dos items ordenados
+            for (let item of sortedItems) {
+              if (item.str) {
+                text += item.str + ' '
+              }
+            }
+
+            return text
+          })
+        }
+      })
 
       const processingTime = Date.now() - startTime
-      const hasText = data.text.trim().length > 0
+      const cleanedText = data.text.trim()
+      const hasText = cleanedText.length > 0
 
       if (hasText) {
-        console.log(`✅ [PDF-Parse] Texto extraído: ${data.text.length} caracteres de ${data.numpages} páginas`)
+        console.log(`✅ [PDF-Parse] Texto extraído: ${cleanedText.length} caracteres de ${data.numpages} páginas`)
+
+        // Validar qualidade do texto extraído
+        const wordCount = cleanedText.split(/\s+/).length
+        const avgWordLength = cleanedText.length / wordCount
+
+        // Se texto parece ser apenas rodapés/números de página (palavras muito curtas)
+        if (avgWordLength < 3 && wordCount < 50) {
+          console.warn(`⚠️ [PDF-Parse] Texto suspeito (apenas ${wordCount} palavras curtas) - pode ser apenas rodapé`)
+          return {
+            text: cleanedText, // Retorna mesmo assim, mas com confiança baixa
+            confidence: 40,
+            processingTime
+          }
+        }
+
         // PDF com texto nativo = alta confiança
         return {
-          text: data.text,
+          text: cleanedText,
           confidence: 95,
           processingTime
         }
       } else {
         console.warn(`⚠️ [PDF-Parse] PDF sem texto (provavelmente escaneado) - ${data.numpages} páginas`)
-        // PDF escaneado sem texto
         return {
           text: '',
           confidence: 0,

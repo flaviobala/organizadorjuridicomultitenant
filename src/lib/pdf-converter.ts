@@ -286,41 +286,54 @@ export class PDFConverter {
   }
 
   /**
-   * ✅ CORRIGIDO: Verifica se PDF deve ser processado em lotes
-   * Critérios: > 5 PÁGINAS (não pelo tamanho!)
+   * ✅ MELHORADO: Verifica se PDF deve ser processado em lotes
+   * Critérios:
+   * 1. Tamanho em MB: > 5MB sempre usa lotes (mesmo com poucas páginas)
+   * 2. Número de páginas: > 5 páginas usa lotes
+   * 3. PDFs muito grandes: limita processamento
    */
   private async shouldProcessInBatches(buffer: Buffer): Promise<{ useBatch: boolean, pageCount: number, skipOCR?: boolean }> {
     try {
       const fileSizeMB = buffer.length / (1024 * 1024)
       console.log(`📊 Analisando PDF: ${fileSizeMB.toFixed(2)}MB`)
 
-      // ✅ SEMPRE verificar número de páginas PRIMEIRO
+      // ✅ PRIORIDADE 1: Verificar tamanho em MB (PDFs pesados mesmo com poucas páginas)
+      if (fileSizeMB > 10) {
+        console.warn(`⚠️ PDF muito pesado (${fileSizeMB.toFixed(2)}MB) - usando processamento em lotes`)
+        return { useBatch: true, pageCount: 20 } // Limitar a 20 páginas para PDFs muito pesados
+      }
+
+      if (fileSizeMB > 5) {
+        console.warn(`⚠️ PDF pesado (${fileSizeMB.toFixed(2)}MB) - usando processamento em lotes`)
+        // Não limita páginas, mas processa em lotes
+      }
+
+      // ✅ PRIORIDADE 2: Verificar número de páginas
       try {
         const pdfDoc = await PDFDocument.load(buffer, { ignoreEncryption: true })
         const pageCount = pdfDoc.getPageCount()
 
         console.log(`📄 Número de páginas: ${pageCount}`)
 
-        // ✅ CORRIGIDO: Processar em lotes se tiver > 5 páginas (não importa o tamanho)
-        if (pageCount > 5) {
-          // PDFs muito grandes: limitar OCR às primeiras 30 páginas
-          if (pageCount > 100) {
-            console.warn(`⚠️ PDF com ${pageCount} páginas - OCR limitado às primeiras 30 páginas`)
-            console.warn(`   💡 Processando apenas início do documento para categorização`)
-            return { useBatch: true, pageCount: 30 }
-          }
+        // PDFs muito grandes: limitar OCR
+        if (pageCount > 100) {
+          console.warn(`⚠️ PDF com ${pageCount} páginas - OCR limitado às primeiras 30 páginas`)
+          console.warn(`   💡 Processando apenas início do documento para categorização`)
+          return { useBatch: true, pageCount: 30 }
+        }
 
-          // PDFs grandes: limitar OCR às primeiras 50 páginas
-          if (pageCount > 50) {
-            console.warn(`⚠️ PDF com ${pageCount} páginas - OCR limitado às primeiras 50 páginas`)
-            return { useBatch: true, pageCount: 50 }
-          }
+        if (pageCount > 50) {
+          console.warn(`⚠️ PDF com ${pageCount} páginas - OCR limitado às primeiras 50 páginas`)
+          return { useBatch: true, pageCount: 50 }
+        }
 
-          console.log(`📦 PDF com ${pageCount} páginas - usando processamento em lotes`)
+        // Processar em lotes se: > 5 páginas OU > 5MB
+        if (pageCount > 5 || fileSizeMB > 5) {
+          console.log(`📦 PDF requer lotes: ${pageCount} páginas, ${fileSizeMB.toFixed(2)}MB`)
           return { useBatch: true, pageCount }
         }
 
-        console.log(`✅ PDF com ${pageCount} páginas - processamento direto`)
+        console.log(`✅ PDF pequeno: ${pageCount} páginas, ${fileSizeMB.toFixed(2)}MB - processamento direto`)
         return { useBatch: false, pageCount }
 
       } catch (pdfError) {
@@ -328,7 +341,7 @@ export class PDFConverter {
         // Fallback: usar tamanho do arquivo
         if (fileSizeMB > 2) {
           console.log('📦 Arquivo > 2MB sem páginas detectadas - usando lotes por segurança')
-          return { useBatch: true, pageCount: 10 } // Assume 10 páginas
+          return { useBatch: true, pageCount: 10 }
         }
       }
 
