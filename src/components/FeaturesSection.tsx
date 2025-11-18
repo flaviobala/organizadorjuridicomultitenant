@@ -29,7 +29,7 @@ export default function FeaturesSection() {
   const features = [
     {
       title: "Upload Inteligente",
-      description: "Suporte para PDF, imagens e documentos do Word com OCR automático via API Elysium.",
+      description: "Suporte para PDF, imagens e documentos do Word com OCR local usando Tesseract (processamento 100% no servidor).",
       icon: <FaCloud />
     },
     {

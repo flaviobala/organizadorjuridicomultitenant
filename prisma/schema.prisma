@@ -199,7 +199,7 @@ model ApiUsage {
   projectId      Int?     @map("project_id")
   documentId     Int?     @map("document_id")
 
-  service        String   // 'openai', 'elysium'
+  service        String   // 'openai', 'tesseract'
   operation      String   // 'categorization', 'validation', 'narrative', etc
   model          String?  // 'gpt-4', 'gpt-3.5-turbo', etc
   tokensInput    Int      @map("tokens_input")
