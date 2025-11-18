@@ -1,10 +1,11 @@
 /**
  * OCR Local com Tesseract.js
- * Processa PDFs e imagens extraindo texto sem depender de APIs externas
+ * Processa imagens extraindo texto sem depender de APIs externas
+ * Para PDFs, usa pdf-parse para extrair texto nativo
  */
 
 import Tesseract, { createWorker, Worker } from 'tesseract.js'
-import { PDFDocument } from 'pdf-lib'
+import pdfParse from 'pdf-parse'
 import sharp from 'sharp'
 
 export interface OCRResult {
@@ -26,20 +27,28 @@ export class TesseractOCR {
 
     console.log('🔧 [Tesseract] Inicializando workers...')
 
-    for (let i = 0; i < this.MAX_WORKERS; i++) {
-      const worker = await createWorker('por+eng', 1, {
-        logger: (m) => {
-          if (m.status === 'recognizing text') {
-            console.log(`📖 [Tesseract Worker ${i}] Progresso: ${(m.progress * 100).toFixed(0)}%`)
+    try {
+      for (let i = 0; i < this.MAX_WORKERS; i++) {
+        const worker = await createWorker({
+          logger: (m) => {
+            if (m.status === 'recognizing text') {
+              console.log(`📖 [Tesseract Worker ${i}] Progresso: ${(m.progress * 100).toFixed(0)}%`)
+            }
           }
-        }
-      })
+        })
 
-      this.workers.push(worker)
-      console.log(`✅ [Tesseract] Worker ${i} inicializado`)
+        await worker.loadLanguage('por+eng')
+        await worker.initialize('por+eng')
+
+        this.workers.push(worker)
+        console.log(`✅ [Tesseract] Worker ${i} inicializado`)
+      }
+
+      this.initialized = true
+    } catch (error) {
+      console.error('❌ [Tesseract] Erro ao inicializar workers:', error)
+      throw error
     }
-
-    this.initialized = true
   }
 
   /**
@@ -61,6 +70,14 @@ export class TesseractOCR {
   private static async preprocessImage(buffer: Buffer): Promise<Buffer> {
     try {
       console.log('🖼️  [Tesseract] Pré-processando imagem...')
+
+      // Verificar se é uma imagem válida
+      const metadata = await sharp(buffer).metadata()
+
+      if (!metadata.format || !['jpeg', 'png', 'webp', 'tiff', 'gif'].includes(metadata.format)) {
+        console.warn(`⚠️ [Tesseract] Formato não suportado: ${metadata.format}, usando original`)
+        return buffer
+      }
 
       const processed = await sharp(buffer)
         // Converter para escala de cinza
@@ -129,73 +146,41 @@ export class TesseractOCR {
   }
 
   /**
-   * Extrair imagens de PDF e processar com OCR
+   * Extrair texto nativo de PDF usando pdf-parse
+   * (para PDFs escaneados sem texto, retorna vazio)
    */
   static async extractFromPDF(buffer: Buffer): Promise<OCRResult> {
     const startTime = Date.now()
 
     try {
-      console.log('📄 [Tesseract] Processando PDF...')
+      console.log('📄 [PDF-Parse] Processando PDF...')
 
-      // Carregar PDF
-      const pdfDoc = await PDFDocument.load(buffer, { ignoreEncryption: true })
-      const pageCount = pdfDoc.getPageCount()
+      // Extrair texto nativo do PDF (não faz OCR)
+      const data = await pdfParse(buffer)
 
-      console.log(`📊 [Tesseract] PDF com ${pageCount} páginas`)
+      const processingTime = Date.now() - startTime
+      const hasText = data.text.trim().length > 0
 
-      // Limitar a 50 páginas para evitar timeout
-      const pagesToProcess = Math.min(pageCount, 50)
-
-      if (pageCount > 50) {
-        console.warn(`⚠️ [Tesseract] PDF muito grande (${pageCount} páginas), processando apenas primeiras 50`)
-      }
-
-      const allTexts: string[] = []
-      let totalConfidence = 0
-
-      // Processar cada página
-      for (let i = 0; i < pagesToProcess; i++) {
-        try {
-          console.log(`📄 [Tesseract] Processando página ${i + 1}/${pagesToProcess}...`)
-
-          // Criar PDF temporário com apenas esta página
-          const singlePagePdf = await PDFDocument.create()
-          const [copiedPage] = await singlePagePdf.copyPages(pdfDoc, [i])
-          singlePagePdf.addPage(copiedPage)
-
-          const singlePageBytes = await singlePagePdf.save()
-          const singlePageBuffer = Buffer.from(singlePageBytes)
-
-          // Converter PDF para imagem usando Sharp
-          // Como Sharp não suporta PDF diretamente, vamos enviar o PDF inteiro
-          // e tentar extrair como imagem
-          const result = await this.extractFromImage(singlePageBuffer)
-
-          if (result.text.trim().length > 0) {
-            allTexts.push(result.text)
-            totalConfidence += result.confidence
-          }
-
-        } catch (pageError) {
-          console.error(`❌ [Tesseract] Erro na página ${i + 1}:`, pageError)
-          continue
+      if (hasText) {
+        console.log(`✅ [PDF-Parse] Texto extraído: ${data.text.length} caracteres de ${data.numpages} páginas`)
+        // PDF com texto nativo = alta confiança
+        return {
+          text: data.text,
+          confidence: 95,
+          processingTime
+        }
+      } else {
+        console.warn(`⚠️ [PDF-Parse] PDF sem texto (provavelmente escaneado) - ${data.numpages} páginas`)
+        // PDF escaneado sem texto
+        return {
+          text: '',
+          confidence: 0,
+          processingTime
         }
       }
 
-      const finalText = allTexts.join('\n\n')
-      const avgConfidence = pagesToProcess > 0 ? totalConfidence / pagesToProcess : 0
-      const processingTime = Date.now() - startTime
-
-      console.log(`✅ [Tesseract] PDF processado: ${finalText.length} caracteres em ${processingTime}ms`)
-
-      return {
-        text: finalText,
-        confidence: avgConfidence,
-        processingTime
-      }
-
     } catch (error) {
-      console.error('❌ [Tesseract] Erro ao processar PDF:', error)
+      console.error('❌ [PDF-Parse] Erro ao processar PDF:', error)
       return {
         text: '',
         confidence: 0,
