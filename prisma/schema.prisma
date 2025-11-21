@@ -65,6 +65,7 @@ model Organization {
   documents      Document[]
   validations    DocumentValidation[]
   apiUsages      ApiUsage[]
+  systems        SystemConfiguration[]
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -92,12 +93,28 @@ model User {
   organizationId Int
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
-  projects  Project[]
-  documents Document[]
-  apiUsages ApiUsage[]
+  projects           Project[]
+  documents          Document[]
+  apiUsages          ApiUsage[]
+  passwordResetTokens PasswordResetToken[]
 
   @@index([organizationId])
   @@map("users")
+}
+
+model PasswordResetToken {
+  id        Int      @id @default(autoincrement())
+  userId    Int      @map("user_id")
+  token     String   @unique
+  expiresAt DateTime @map("expires_at")
+  used      Boolean  @default(false)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([token])
+  @@map("password_reset_tokens")
 }
 
 model Project {
@@ -228,15 +245,22 @@ model ApiUsage {
 // =============================================
 
 model SystemConfiguration {
-  id              Int      @id @default(autoincrement())
-  systemName      String   @unique @map("system_name")
-  maxFileSize     Int      @map("max_file_size")
-  maxPageSize     Int      @map("max_page_size")
-  allowedFormats  String   @map("allowed_formats")
-  pdfRequirements String   @db.Text @map("pdf_requirements")
-  createdAt       DateTime @default(now()) @map("created_at")
-  updatedAt       DateTime @updatedAt @map("updated_at")
+  id              Int          @id @default(autoincrement())
+  systemName      String       @map("system_name")
+  maxFileSize     Int          @map("max_file_size")
+  maxPageSize     Int          @map("max_page_size")
+  allowedFormats  String       @map("allowed_formats")
+  pdfRequirements String       @db.Text @map("pdf_requirements")
 
+  // Multi-tenant: cada organização tem seus próprios sistemas
+  organizationId  Int          @map("organization_id")
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  createdAt       DateTime     @default(now()) @map("created_at")
+  updatedAt       DateTime     @updatedAt @map("updated_at")
+
+  // Sistema único por organização (permite mesmo nome em orgs diferentes)
+  @@unique([organizationId, systemName])
   @@map("system_configurations")
 }
 

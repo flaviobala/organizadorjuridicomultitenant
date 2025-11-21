@@ -27,7 +27,16 @@ export async function middleware(request: NextRequest) {
   }
 
   // Rotas públicas que não precisam de autenticação
-  const publicPaths = ['/login', '/register', '/api/auth/login', '/api/auth/register']
+  const publicPaths = [
+    '/login',
+    '/register',
+    '/forgot-password',
+    '/reset-password',
+    '/api/auth/login',
+    '/api/auth/register',
+    '/api/auth/forgot-password',
+    '/api/auth/reset-password'
+  ]
   if (publicPaths.some(path => pathname.startsWith(path))) {
     return NextResponse.next()
   }

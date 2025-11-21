@@ -91,27 +91,68 @@ export class DOCXProcessor {
       let currentPage = pdfDoc.addPage([pageWidth, pageHeight])
       let yPosition = pageHeight - margin
 
+      // Limpar caracteres especiais que WinAnsi não suporta
+      const cleanText = result.text
+        .replace(/\t/g, '    ') // Substituir tabs por 4 espaços
+        .replace(/[\u0000-\u001F\u007F-\u009F]/g, '') // Remover caracteres de controle
+        .replace(/[^\x20-\x7E\u00A0-\u00FF\n]/g, '') // Manter apenas caracteres WinAnsi + quebras de linha
+
       // Quebrar texto em linhas
-      const lines = result.text.split('\n')
+      const lines = cleanText.split('\n')
 
       for (const line of lines) {
+        // Pular linhas vazias
+        if (!line.trim()) {
+          yPosition -= lineHeight
+          if (yPosition < margin) {
+            currentPage = pdfDoc.addPage([pageWidth, pageHeight])
+            yPosition = pageHeight - margin
+          }
+          continue
+        }
+
         // Quebrar linha se muito longa
         const words = line.split(' ')
         let currentLine = ''
 
         for (const word of words) {
+          if (!word) continue // Pular palavras vazias
+
           const testLine = currentLine + (currentLine ? ' ' : '') + word
-          const textWidth = font.widthOfTextAtSize(testLine, fontSize)
+
+          let textWidth
+          try {
+            textWidth = font.widthOfTextAtSize(testLine, fontSize)
+          } catch (encodeError) {
+            // Se falhar ao calcular largura, usar palavra sem caracteres especiais
+            const cleanWord = word.replace(/[^\x20-\x7E\u00A0-\u00FF]/g, '')
+            const cleanTestLine = currentLine + (currentLine ? ' ' : '') + cleanWord
+            textWidth = font.widthOfTextAtSize(cleanTestLine, fontSize)
+          }
 
           if (textWidth > maxWidth && currentLine) {
             // Desenhar linha atual
-            currentPage.drawText(currentLine, {
-              x: margin,
-              y: yPosition,
-              size: fontSize,
-              font,
-              color: rgb(0, 0, 0)
-            })
+            try {
+              currentPage.drawText(currentLine, {
+                x: margin,
+                y: yPosition,
+                size: fontSize,
+                font,
+                color: rgb(0, 0, 0)
+              })
+            } catch (drawError) {
+              // Tentar com texto limpo se falhar
+              const cleanLine = currentLine.replace(/[^\x20-\x7E\u00A0-\u00FF]/g, '')
+              if (cleanLine) {
+                currentPage.drawText(cleanLine, {
+                  x: margin,
+                  y: yPosition,
+                  size: fontSize,
+                  font,
+                  color: rgb(0, 0, 0)
+                })
+              }
+            }
 
             yPosition -= lineHeight
 
@@ -129,13 +170,27 @@ export class DOCXProcessor {
 
         // Desenhar linha restante
         if (currentLine) {
-          currentPage.drawText(currentLine, {
-            x: margin,
-            y: yPosition,
-            size: fontSize,
-            font,
-            color: rgb(0, 0, 0)
-          })
+          try {
+            currentPage.drawText(currentLine, {
+              x: margin,
+              y: yPosition,
+              size: fontSize,
+              font,
+              color: rgb(0, 0, 0)
+            })
+          } catch (drawError) {
+            // Tentar com texto limpo se falhar
+            const cleanLine = currentLine.replace(/[^\x20-\x7E\u00A0-\u00FF]/g, '')
+            if (cleanLine) {
+              currentPage.drawText(cleanLine, {
+                x: margin,
+                y: yPosition,
+                size: fontSize,
+                font,
+                color: rgb(0, 0, 0)
+              })
+            }
+          }
 
           yPosition -= lineHeight
 

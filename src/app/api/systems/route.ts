@@ -40,21 +40,25 @@ export async function POST(request: NextRequest) {
       }, { status: 400 })
     }
 
-    // Verificar se já existe
-    const existingSystem = await prisma.systemConfiguration.findUnique({
-      where: { systemName: systemName.trim() }
+    // Verificar se já existe para esta organização
+    const existingSystem = await prisma.systemConfiguration.findFirst({
+      where: {
+        organizationId: auth.user.organizationId,
+        systemName: systemName.trim()
+      }
     })
 
     if (existingSystem) {
       return NextResponse.json({
         success: false,
-        error: 'Sistema já existe no banco de dados'
+        error: 'Sistema já existe para sua organização'
       }, { status: 409 })
     }
 
-    // Criar novo sistema
+    // Criar novo sistema para esta organização
     const newSystem = await prisma.systemConfiguration.create({
       data: {
+        organizationId: auth.user.organizationId,
         systemName: systemName.trim(),
         maxFileSize: maxFileSize,
         maxPageSize: maxPageSize,
@@ -101,12 +105,17 @@ export async function GET(request: NextRequest) {
     }
 
     console.log('✅ Usuário autenticado:', auth.user.email)
+    console.log('🏢 Organização ID:', auth.user.organizationId)
 
+    // Buscar apenas sistemas da organização do usuário
     const systems = await prisma.systemConfiguration.findMany({
+      where: {
+        organizationId: auth.user.organizationId
+      },
       orderBy: { systemName: 'asc' }
     })
 
-    console.log('📊 Sistemas encontrados no banco:', systems.length)
+    console.log('📊 Sistemas encontrados para organização:', systems.length)
     console.log('📋 Lista de sistemas:', systems.map(s => s.systemName))
 
     const formattedSystems = systems.map(system => {

@@ -108,15 +108,18 @@ export async function POST(request: NextRequest) {
 
     const { name, client, system, actionType, narrative } = validation.data
 
-    // Verificar sistema (lógica de negócio mantida)
-    const systemConfig = await prisma.systemConfiguration.findUnique({
-      where: { systemName: system }
+    // Verificar sistema (filtrado por organização)
+    const systemConfig = await prisma.systemConfiguration.findFirst({
+      where: {
+        organizationId: auth.user.organizationId,
+        systemName: system
+      }
     })
 
     if (!systemConfig) {
       return NextResponse.json({
         success: false,
-        error: 'Sistema judicial não encontrado'
+        error: 'Sistema judicial não encontrado para sua organização'
       }, { status: 400 })
     }
 

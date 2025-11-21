@@ -13,7 +13,15 @@
       "Bash(npm run dev:*)",
       "Bash(powershell -ExecutionPolicy Bypass -File convert-to-utf8.ps1)",
       "Bash(powershell -ExecutionPolicy Bypass -File clean-backup.ps1)",
-      "Bash(npm install:*)"
+      "Bash(npm install:*)",
+      "Bash(dir:*)",
+      "Bash(findstr:*)",
+      "Bash(\"C:\\Program Files\\gs\\gs10.06.0\\bin\\gswin64c.exe\" -dSAFER -dBATCH -dNOPAUSE -dFirstPage=5 -dLastPage=10 -sDEVICE=png16m -r150 -sOutputFile=test-page-%d.png \"09. Termo de notificação e informações complementares.pdf\")",
+      "Bash(npx tsx:*)",
+      "Bash(timeout 60 npx tsx:*)",
+      "Bash(awk:*)",
+      "Bash(cat:*)",
+      "Bash(psql:*)"
     ],
     "deny": [],
     "ask": []

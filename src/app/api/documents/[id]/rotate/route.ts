@@ -137,7 +137,8 @@ export async function POST(
       let newRotation = (currentRotation + degrees) % 360
       if (newRotation < 0) newRotation += 360
 
-      page.setRotation({ type: 'degrees', angle: newRotation })
+      // ✅ CORRIGIDO: pdf-lib usa degrees() como função, não objeto
+      page.setRotation({ angle: newRotation })
       console.log(`   Página ${i + 1}: ${currentRotation}° → ${newRotation}°`)
     }
 

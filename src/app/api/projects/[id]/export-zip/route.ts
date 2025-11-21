@@ -39,6 +39,35 @@ function normalizeText(s = '') {
 }
 
 /**
+ * Normaliza tipo de documento para agrupamento
+ */
+function normalizeDocumentType(documentType: string): string {
+  if (!documentType) return ''
+  return documentType
+    .toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/^\d+\s*/, '')
+    .replace(/\b(de|da|do|dos|das)\b/g, '')
+    .replace(/\b(individual|pessoal|completo|geral)\b/g, '')
+    .replace(/[^\w\s]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+/**
+ * Verifica se dois tipos de documento são similares
+ */
+function areDocumentTypesSimilar(type1: string, type2: string): boolean {
+  const normalized1 = normalizeDocumentType(type1)
+  const normalized2 = normalizeDocumentType(type2)
+  if (normalized1 === normalized2) return true
+  const words1 = normalized1.split(' ').filter(w => w.length > 3)
+  const words2 = normalized2.split(' ').filter(w => w.length > 3)
+  const commonWords = words1.filter(w => words2.includes(w))
+  return commonWords.length > 0 && words1[0] === words2[0]
+}
+
+/**
  * Baixa um PDF do storage (local ou Supabase)
  * Extrai o caminho correto de URLs Supabase ou locais
  */
@@ -61,7 +90,17 @@ async function getPDFBuffer(pdfPath: string): Promise<Buffer> {
         if (uploadsIdx >= 0) {
           storagePath = u.pathname.substring(uploadsIdx + '/uploads/'.length);
         } else {
-          storagePath = u.pathname.replace(/^\/+/, '');
+          // ✅ CORREÇÃO: Pegar apenas a última parte do path (ex: /payment-success/processed/file.pdf → processed/file.pdf)
+          // Assumir que o caminho real começa com 'processed/' ou similar
+          const pathParts = u.pathname.split('/').filter(p => p.length > 0);
+
+          // Se tiver pelo menos 2 partes (ex: ['payment-success', 'processed', 'file.pdf'])
+          // Pegar as últimas 2 partes (processed/file.pdf)
+          if (pathParts.length >= 2) {
+            storagePath = pathParts.slice(-2).join('/');
+          } else {
+            storagePath = u.pathname.replace(/^\/+/, '');
+          }
         }
       }
     } catch {
@@ -330,47 +369,102 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       } catch (e) { console.warn('❌ Erro ao adicionar contrato:', e); }
     }
 
-    // ✅ CORRIGIDO: Outros Documentos - processar documentos restantes na ordem correta
+    // ✅ NOVO: Agrupar documentos restantes por tipo similar
     console.log(`📋 Processando outros documentos... Total de documentos: ${project.documents.length}, Já usados: ${usados.size}`);
 
-    for (const doc of project.documents) {
-      // Pular documentos já adicionados
-      if (usados.has(doc.id)) continue;
+    // Filtrar documentos restantes (não usados)
+    const documentosRestantes = project.documents.filter((d: any) => !usados.has(d.id) && d.pdfPath);
 
-      // Pular documentos sem PDF
-      if (!doc.pdfPath) {
-        console.warn(`⚠️ Documento ${doc.id} sem pdfPath, pulando...`);
-        continue;
+    // Agrupar por tipo similar
+    const grupos = new Map<string, typeof documentosRestantes>();
+    for (const doc of documentosRestantes) {
+      const docType = doc.detectedDocumentType || doc.documentType || 'Outros Documentos';
+      let foundGroup = false;
+
+      // Procurar grupo similar existente
+      for (const [groupKey, groupDocs] of grupos.entries()) {
+        if (areDocumentTypesSimilar(groupKey, docType)) {
+          groupDocs.push(doc);
+          foundGroup = true;
+          break;
+        }
       }
 
+      // Criar novo grupo se não encontrou similar
+      if (!foundGroup) {
+        grupos.set(docType, [doc]);
+      }
+    }
+
+    console.log(`🔗 ${grupos.size} grupos de documentos identificados`);
+
+    // Processar cada grupo
+    for (const [tipoGrupo, docs] of grupos.entries()) {
       try {
-        const buf = await getPDFBuffer(doc.pdfPath);
+        // Extrair nome base limpo
+        let nomeBase = tipoGrupo.replace(/^\d+\s+/, '').replace(/\.pdf$/i, '') || 'Outros Documentos';
+        nomeBase = sanitizeFilename(nomeBase);
 
-        // ✅ CORRIGIDO: Usar smartFilename ou gerar nome inteligente baseado no tipo detectado
-        let nomeBase = '';
+        // Se houver 2+ documentos do mesmo tipo, agrupar
+        if (docs.length >= 2) {
+          console.log(`📦 Agrupando "${nomeBase}" (${docs.length} documentos):`);
 
-        if (doc.smartFilename) {
-          // Remover numeração se já existir (ex: "02 Documentos Pessoais.pdf" -> "Documentos Pessoais")
-          nomeBase = doc.smartFilename.replace(/^\d+\s+/, '').replace(/\.pdf$/i, '');
-        } else if (doc.detectedDocumentType) {
-          nomeBase = doc.detectedDocumentType;
-        } else if (doc.documentType) {
-          // Remover o código numérico do tipo (ex: "07 ASO" -> "ASO")
-          nomeBase = doc.documentType.replace(/^\d+\s+/, '');
+          try {
+            // Combinar PDFs usando pdf-lib
+            const mergedPdf = await PDFDocument.create();
+
+            for (const doc of docs) {
+              try {
+                const buf = await getPDFBuffer(doc.pdfPath!);
+                const pdf = await PDFDocument.load(buf);
+                const pages = await mergedPdf.copyPages(pdf, pdf.getPageIndices());
+                pages.forEach(page => mergedPdf.addPage(page));
+                usados.add(doc.id);
+                console.log(`   ✅ ${doc.smartFilename || doc.storedFilename}`);
+              } catch (e) {
+                console.warn(`   ⚠️ Erro ao processar ${doc.storedFilename}:`, e);
+              }
+            }
+
+            const mergedBytes = await mergedPdf.save();
+            const filename = `${String(nextIdx).padStart(2, '0')} ${nomeBase}.pdf`;
+            zip.file(filename, mergedBytes);
+            nextIdx++;
+            console.log(`   ✅ Arquivo agrupado criado: ${filename} (${docs.length} páginas)`);
+
+          } catch (e) {
+            console.error(`   ❌ Erro ao agrupar "${nomeBase}":`, e);
+            // Se falhar agrupamento, adicionar individualmente
+            for (const doc of docs) {
+              try {
+                const buf = await getPDFBuffer(doc.pdfPath!);
+                const filename = `${String(nextIdx).padStart(2, '0')} ${nomeBase}.pdf`;
+                zip.file(filename, buf);
+                usados.add(doc.id);
+                nextIdx++;
+                console.log(`✅ ${filename} adicionado individualmente`);
+              } catch (e2) {
+                console.warn(`❌ Erro ao adicionar ${doc.storedFilename}:`, e2);
+              }
+            }
+          }
+
         } else {
-          nomeBase = sanitizeFilename(doc.originalFilename || 'Documento').replace(/\.pdf$/i, '');
+          // Documento único - adicionar individualmente
+          const doc = docs[0];
+          try {
+            const buf = await getPDFBuffer(doc.pdfPath!);
+            const filename = `${String(nextIdx).padStart(2, '0')} ${nomeBase}.pdf`;
+            zip.file(filename, buf);
+            usados.add(doc.id);
+            nextIdx++;
+            console.log(`✅ ${filename} adicionado ao ZIP`);
+          } catch (e) {
+            console.warn(`❌ Erro ao adicionar ${doc.storedFilename}:`, e);
+          }
         }
-
-        nomeBase = sanitizeFilename(nomeBase) || 'Outros Documentos';
-
-        // ✅ CORRIGIDO: Gerar filename com numeração sequencial correta
-        const filename = `${String(nextIdx).padStart(2, '0')} ${nomeBase}.pdf`;
-        zip.file(filename, buf);
-        usados.add(doc.id);
-        nextIdx++;
-        console.log(`✅ ${filename} adicionado ao ZIP`);
       } catch (e) {
-        console.warn(`❌ Ignorando documento ${doc.id} não recuperável:`, e);
+        console.error(`❌ Erro ao processar grupo "${tipoGrupo}":`, e);
       }
     }
 

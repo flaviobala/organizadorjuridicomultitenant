@@ -119,7 +119,7 @@ export async function POST(request: NextRequest) {
 
     // ⚠️ PONTO DE ATENÇÃO (Veja a clarificação abaixo)
     const converter = new PDFConverter(project.system)
-    await converter.init()
+    await converter.init(auth.user.organizationId) // Passar organizationId para carregar configs
 
     // ✅ Passando userId, documentId e organizationId para tracking multi-tenant
     const conversionResult = await converter.convertToPDF(
@@ -165,7 +165,13 @@ export async function POST(request: NextRequest) {
     } else {
       // Documento normal - salvar agora
       console.log('💾 Salvando documento normal no banco...')
-      
+      console.log('💾 ===== DADOS PARA SALVAR =====')
+      console.log('   OCR Text:', conversionResult.ocrText ? conversionResult.ocrText.length + ' chars' : 'VAZIO')
+      console.log('   Smart Filename:', conversionResult.smartFilename)
+      console.log('   Tipo:', documentType === 'auto-detect'
+            ? (conversionResult.documentAnalysis?.documentType || 'Outros Documentos')
+            : documentType)
+
       // ✅ ALTERAÇÃO MULTI-TENANT (Injeção Obrigatória)
       // Injetar o organizationId na criação do documento
       document = await prisma.document.create({
@@ -176,7 +182,7 @@ export async function POST(request: NextRequest) {
           originalFilename: file.name,
           storedFilename: conversionResult.smartFilename || file.name,
           smartFilename: conversionResult.smartFilename,
-          documentType: documentType === 'auto-detect' 
+          documentType: documentType === 'auto-detect'
             ? (conversionResult.documentAnalysis?.documentType || 'Outros Documentos')
             : documentType,
           detectedDocumentType: conversionResult.documentAnalysis?.documentType,
@@ -190,12 +196,17 @@ export async function POST(request: NextRequest) {
           ocrText: conversionResult.ocrText,
           pdfSizeBytes: conversionResult.finalSizeBytes,
           pageCount: conversionResult.pageCount,
-          aiAnalysis: conversionResult.documentAnalysis 
-            ? JSON.stringify(conversionResult.documentAnalysis) 
+          aiAnalysis: conversionResult.documentAnalysis
+            ? JSON.stringify(conversionResult.documentAnalysis)
             : null,
           analysisConfidence: conversionResult.documentAnalysis?.confidence
         }
       })
+
+      console.log('✅ ===== DOCUMENTO SALVO NO BANCO =====')
+      console.log('   ID:', document.id)
+      console.log('   OCR Text salvo:', document.ocrText ? document.ocrText.length + ' chars' : 'VAZIO')
+      console.log('   Smart Filename:', document.smartFilename)
 
       console.log('💾 Documento salvo no banco:', { /* ... */ })
 
@@ -209,12 +220,18 @@ export async function POST(request: NextRequest) {
     // ... (Resposta final OK) ...
     return NextResponse.json({
       success: true,
-      /* ... */
       document: {
         id: document.id,
-        /* ... */
         createdAt: document.createdAt
-      }
+      },
+      // ✅ Adicionar métricas de qualidade do OCR
+      ocrQuality: conversionResult.ocrConfidence !== undefined ? {
+        confidence: conversionResult.ocrConfidence,
+        charactersExtracted: conversionResult.ocrCharactersExtracted || 0,
+        pagesProcessed: conversionResult.ocrPagesProcessed || 1,
+        qualityLevel: conversionResult.ocrQualityLevel || 'failed',
+        ocrText: conversionResult.ocrText
+      } : undefined
     })
 
   } catch (error) {

@@ -15,12 +15,20 @@ const openai = new OpenAI({
 export interface ElysiumOCR {
   text: string
   fileBase64: string
+  words?: Array<{ text: string; x: number; y: number; width: number; height: number; confidence: number }>
+  confidence?: number // ✅ Confiança do OCR (0-100)
+  processingTime?: number // ✅ Tempo de processamento em ms
+  pagesProcessed?: number // ✅ Número de páginas processadas
 }
 export interface ConversionResult {
   success: boolean
   pdfPath?: string
   pdfBuffer?: Buffer
   ocrText?: string
+  ocrConfidence?: number // ✅ Confiança do OCR (0-100)
+  ocrCharactersExtracted?: number // ✅ Número de caracteres extraídos
+  ocrPagesProcessed?: number // ✅ Páginas processadas com OCR
+  ocrQualityLevel?: 'excellent' | 'good' | 'poor' | 'failed' // ✅ Nível de qualidade
   pageCount?: number
   finalSizeBytes?: number
   smartFilename?: string
@@ -49,6 +57,13 @@ export interface DocumentToProcess {
   mimeType: string
   filename: string
   ocrText?: string
+  ocrWords?: Array<{ text: string; x: number; y: number; width: number; height: number; confidence: number }>
+  ocrQualityMetrics?: { // ✅ Métricas de qualidade do OCR
+    confidence: number
+    charactersExtracted: number
+    pagesProcessed: number
+    processingTime: number
+  }
   analysis?: DocumentAnalysis
 }
 
@@ -81,21 +96,41 @@ export class PDFConverter {
 
   constructor(private systemName: string) {}
 
-  async init(): Promise<void> {
-    console.log('🔧 Inicializando PDFConverter para:', this.systemName)
-    
-    // Carregar configurações do sistema se disponível
-    try {
-      const config = await prisma.systemConfiguration.findUnique({
-        where: { systemName: this.systemName }
-      })
+  /**
+   * Limpar texto para compatibilidade com WinAnsi encoding
+   * Remove caracteres que StandardFonts não suportam
+   */
+  private static cleanTextForWinAnsi(text: string): string {
+    if (!text) return ''
 
-      if (config?.pdfRequirements) {
-        this.systemRequirements = JSON.parse(config.pdfRequirements)
-        console.log('✅ Configurações carregadas:', this.systemRequirements)
+    return text
+      .replace(/\t/g, '    ') // Substituir tabs por 4 espaços
+      .replace(/[\u0000-\u001F\u007F-\u009F]/g, '') // Remover caracteres de controle
+      .replace(/[^\x20-\x7E\u00A0-\u00FF\n]/g, '') // Manter apenas caracteres WinAnsi + quebras de linha
+  }
+
+  async init(organizationId?: number): Promise<void> {
+    console.log('🔧 Inicializando PDFConverter para:', this.systemName)
+
+    // Carregar configurações do sistema se disponível e organizationId fornecido
+    if (organizationId) {
+      try {
+        const config = await prisma.systemConfiguration.findFirst({
+          where: {
+            organizationId: organizationId,
+            systemName: this.systemName
+          }
+        })
+
+        if (config?.pdfRequirements) {
+          this.systemRequirements = JSON.parse(config.pdfRequirements)
+          console.log('✅ Configurações carregadas:', this.systemRequirements)
+        }
+      } catch (error) {
+        console.warn('⚠️ Usando configurações padrão:', error)
       }
-    } catch (error) {
-      console.warn('⚠️ Usando configurações padrão:', error)
+    } else {
+      console.log('ℹ️ Usando configurações padrão (organizationId não fornecido)')
     }
   }
 
@@ -120,10 +155,29 @@ export class PDFConverter {
         projectId
       })
 
-            // 1. Extrair texto via OCR
+      // 1. Extrair texto via OCR
+      console.log('🔍 ===== INICIANDO EXTRAÇÃO DE TEXTO =====')
+      console.log('   Arquivo:', originalFilename)
+      console.log('   Tipo MIME:', mimeType)
+      console.log('   Tamanho:', this.formatFileSize(inputBuffer.length))
+
       let ocrText = '';
       const resultOCR = await this.extractText(inputBuffer, mimeType)
       ocrText = resultOCR.text ?? ''
+
+      // ✅ Capturar métricas de qualidade do OCR
+      const ocrQualityMetrics = {
+        confidence: resultOCR.confidence || 0,
+        charactersExtracted: ocrText.length,
+        pagesProcessed: resultOCR.pagesProcessed || 1,
+        processingTime: resultOCR.processingTime || 0
+      }
+
+      console.log('🔍 ===== RESULTADO DA EXTRAÇÃO =====')
+      console.log('   Texto extraído?', ocrText.length > 0 ? 'SIM' : 'NÃO')
+      console.log('   Comprimento:', ocrText.length, 'caracteres')
+      console.log('   Confiança OCR:', ocrQualityMetrics.confidence + '%')
+      console.log('   Preview:', ocrText.substring(0, 150))
 
       // ✅ CORREÇÃO: Processar PDF retornado pelo OCR apenas se válido
       if (resultOCR.fileBase64 && resultOCR.fileBase64.length > 100) {
@@ -167,6 +221,8 @@ export class PDFConverter {
         mimeType,
         filename: originalFilename,
         ocrText,
+        ocrWords: resultOCR.words,
+        ocrQualityMetrics, // ✅ Adicionar métricas de qualidade
         analysis: {
           documentType: categoryInfo.code,
           confidence: 0.9,
@@ -179,11 +235,27 @@ export class PDFConverter {
 
       // 4. Processamento com lógica inteligente
       let result: ConversionResult
-      
+
       if (categoryInfo.isPersonalDocument && projectId) {
-        // Documentos pessoais - agrupar automaticamente
+        // Documentos pessoais - agrupar automaticamente (RG, CPF, CNH)
         console.log('📄 Processando documento pessoal:', categoryInfo.name)
         result = await this.handlePersonalDocument(docToProcess, categoryInfo, documentNumber, projectId)
+      } else if (projectId) {
+        // ✅ NOVO: Verificar se deve agrupar com documentos similares do projeto
+        // Buscar documentos do mesmo tipo (normalizado) no projeto
+        const shouldGroup = await this.shouldGroupDocument(categoryInfo, projectId, organizationId)
+
+        if (shouldGroup) {
+          console.log('🔗 Detectado documento agrupável:', categoryInfo.name)
+          result = await this.handleGroupableDocument(docToProcess, categoryInfo, documentNumber, projectId, organizationId!)
+        } else if (categoryInfo.canDivide && this.needsDivision(inputBuffer)) {
+          // Documentos grandes - dividir se necessário
+          console.log('✂️ Documento grande detectado, dividindo:', categoryInfo.name)
+          result = await this.handleDivisibleDocument(docToProcess, categoryInfo, documentNumber)
+        } else {
+          console.log('📄 Processando documento único:', categoryInfo.name)
+          result = await this.processSingleDocument(docToProcess, categoryInfo, documentNumber)
+        }
       } else if (categoryInfo.canDivide && this.needsDivision(inputBuffer)) {
         // Documentos grandes - dividir se necessário
         console.log('✂️ Documento grande detectado, dividindo:', categoryInfo.name)
@@ -234,44 +306,92 @@ export class PDFConverter {
         }
       }
 
-      // ✅ PRIORIDADE 1: Processar arquivos DOCX/DOC
+      // ✅ PRIORIDADE 1: Arquivos de texto (.txt, .csv, etc.)
+      if (mimeType && mimeType.startsWith('text/')) {
+        try {
+          console.log('📝 [TEXT] Detectado arquivo de texto, lendo diretamente...')
+          const textContent = processedBuffer.toString('utf-8')
+
+          if (textContent.length > 0) {
+            console.log(`✅ [TEXT] Texto lido: ${textContent.length} caracteres`)
+            return { text: textContent, fileBase64: '' }
+          }
+        } catch (textError) {
+          console.warn('⚠️ [TEXT] Erro ao ler arquivo de texto:', textError)
+        }
+      }
+
+      // ✅ PRIORIDADE 2: Processar arquivos DOCX/DOC
       if (mimeType && (mimeType.includes('word') || mimeType.includes('document'))) {
         try {
           console.log('📄 [DOCX] Detectado arquivo Word, processando...')
+
+          // Extrair texto
           const docxResult = await DOCXProcessor.extractText(processedBuffer)
 
           if (docxResult.text.length > 0) {
             console.log(`✅ [DOCX] Texto extraído: ${docxResult.text.length} caracteres, ${docxResult.wordCount} palavras`)
-            return { text: docxResult.text, fileBase64: '' }
+
+            // Converter DOCX para PDF
+            console.log('📄 [DOCX] Convertendo para PDF...')
+            const pdfBuffer = await DOCXProcessor.convertToPDF(processedBuffer)
+            const pdfBase64 = pdfBuffer.toString('base64')
+
+            console.log(`✅ [DOCX] PDF gerado: ${this.formatFileSize(pdfBuffer.length)}`)
+
+            return {
+              text: docxResult.text,
+              fileBase64: pdfBase64
+            }
           }
         } catch (docxError) {
           console.warn('⚠️ [DOCX] Erro ao processar Word, tentando OCR:', docxError)
         }
       }
 
-      // ✅ PRIORIDADE 2: OCR Local com Tesseract
+      // ✅ PRIORIDADE 3: OCR Local com Tesseract
       try {
-        console.log('🔍 [Tesseract] Iniciando OCR local...')
+        console.log('🔍 ===== TESSERACT OCR =====')
+        console.log('   Tipo detectado:', mimeType === 'application/pdf' ? 'PDF' : 'IMAGEM')
+        console.log('   Tamanho do buffer:', processedBuffer.length, 'bytes')
 
         const tesseractResult = mimeType === 'application/pdf'
           ? await TesseractOCR.extractFromPDF(processedBuffer)
           : await TesseractOCR.extractFromImage(processedBuffer)
 
+        console.log('🔍 ===== RESULTADO TESSERACT =====')
+        console.log('   Texto extraído:', tesseractResult.text.length, 'caracteres')
+        console.log('   Confiança:', tesseractResult.confidence.toFixed(1) + '%')
+        console.log('   Tempo:', tesseractResult.processingTime + 'ms')
+        console.log('   Preview:', tesseractResult.text.substring(0, 200))
+
         // Aceitar resultado se tiver texto razoável e confiança > 30%
         if (tesseractResult.text.length > 10 && tesseractResult.confidence > 30) {
-          console.log(`✅ [Tesseract] OCR local bem-sucedido:`, {
-            caracteres: tesseractResult.text.length,
-            confianca: `${tesseractResult.confidence.toFixed(1)}%`,
-            tempo: `${tesseractResult.processingTime}ms`
-          })
-          return { text: tesseractResult.text, fileBase64: '' }
+          console.log(`✅ [Tesseract] OCR ACEITO - Retornando texto extraído`)
+
+          // ✅ Contar páginas apenas se for PDF
+          let pagesProcessed = 1
+          if (mimeType === 'application/pdf') {
+            pagesProcessed = await this.shouldProcessInBatches(processedBuffer).then(r => r.pageCount).catch(() => 1)
+          }
+
+          return {
+            text: tesseractResult.text,
+            fileBase64: '',
+            words: tesseractResult.words,
+            confidence: tesseractResult.confidence,
+            processingTime: tesseractResult.processingTime,
+            pagesProcessed
+          }
         } else {
-          console.warn(`⚠️ [Tesseract] Resultado insuficiente (${tesseractResult.text.length} chars, ${tesseractResult.confidence.toFixed(1)}% confiança)`)
+          console.warn(`⚠️ [Tesseract] OCR REJEITADO - Insuficiente (${tesseractResult.text.length} chars, ${tesseractResult.confidence.toFixed(1)}% confiança)`)
           console.warn(`   💡 Sistema usará análise por nome de arquivo + ChatGPT`)
-          return { text: '', fileBase64: '' }
+          return { text: '', fileBase64: '', confidence: 0 }
         }
       } catch (tesseractError) {
-        console.error('❌ [Tesseract] Erro no OCR local:', tesseractError)
+        console.error('❌ ===== ERRO CRÍTICO NO TESSERACT =====')
+        console.error('   Erro:', tesseractError)
+        console.error('   Stack:', tesseractError instanceof Error ? tesseractError.stack : 'N/A')
         console.warn('   💡 Sistema usará análise por nome de arquivo + ChatGPT')
         return { text: '', fileBase64: '' }
       }
@@ -297,18 +417,7 @@ export class PDFConverter {
       const fileSizeMB = buffer.length / (1024 * 1024)
       console.log(`📊 Analisando PDF: ${fileSizeMB.toFixed(2)}MB`)
 
-      // ✅ PRIORIDADE 1: Verificar tamanho em MB (PDFs pesados mesmo com poucas páginas)
-      if (fileSizeMB > 10) {
-        console.warn(`⚠️ PDF muito pesado (${fileSizeMB.toFixed(2)}MB) - usando processamento em lotes`)
-        return { useBatch: true, pageCount: 20 } // Limitar a 20 páginas para PDFs muito pesados
-      }
-
-      if (fileSizeMB > 5) {
-        console.warn(`⚠️ PDF pesado (${fileSizeMB.toFixed(2)}MB) - usando processamento em lotes`)
-        // Não limita páginas, mas processa em lotes
-      }
-
-      // ✅ PRIORIDADE 2: Verificar número de páginas
+      // ✅ PRIORIDADE: Sempre verificar número real de páginas primeiro
       try {
         const pdfDoc = await PDFDocument.load(buffer, { ignoreEncryption: true })
         const pageCount = pdfDoc.getPageCount()
@@ -358,63 +467,193 @@ export class PDFConverter {
    * Timeout: 25s por lote + delay de 2s entre lotes
    */
   private async extractTextInBatches(buffer: Buffer, totalPages: number): Promise<ElysiumOCR> {
-    const pagesPerBatch = 3 // ✅ BALANCEADO: 3 páginas por lote
     const extractedTexts: string[] = []
 
     try {
-      const pdfDoc = await PDFDocument.load(buffer, { ignoreEncryption: true })
-      const batchCount = Math.ceil(totalPages / pagesPerBatch)
-
-      console.log(`📦 ===== PROCESSAMENTO EM LOTES (Tesseract Local) =====`)
+      console.log(`📦 ===== PROCESSAMENTO COM OCR (Ghostscript + Tesseract) =====`)
       console.log(`📦 Total de páginas: ${totalPages}`)
-      console.log(`📦 Páginas por lote: ${pagesPerBatch}`)
-      console.log(`📦 Total de lotes: ${batchCount}`)
-      console.log(`📦 Tempo estimado: ~${(batchCount * 15 / 60).toFixed(1)} minutos (OCR local)`)
-      console.log(`📦 ======================================================`)
+      console.log(`📦 Tempo estimado: ~${(totalPages * 7 / 60).toFixed(1)} minutos`)
+      console.log(`📦 ================================================================`)
 
-      for (let i = 0; i < totalPages; i += pagesPerBatch) {
-        const endPage = Math.min(i + pagesPerBatch, totalPages)
-        const currentBatch = Math.floor(i / pagesPerBatch) + 1
+      // Converter PDF para imagens com Ghostscript
+      const pageImages = await this.convertAllPDFPagesToImages(buffer, totalPages)
 
-        console.log(`📦 [LOTE ${currentBatch}/${batchCount}] Páginas ${i + 1}-${endPage}`)
+      if (!pageImages || pageImages.length === 0) {
+        console.error('❌ Não foi possível converter PDF para imagens')
+        return { text: '', fileBase64: '' }
+      }
+
+      console.log(`📸 ${pageImages.length} páginas convertidas para imagem`)
+
+      // Processar cada página com OCR
+      for (let i = 0; i < pageImages.length; i++) {
+        console.log(`📄 [Página ${i + 1}/${pageImages.length}] Executando OCR...`)
 
         try {
-          // Criar PDF temporário com apenas essas páginas
-          const batchPdf = await PDFDocument.create()
-          const pageIndices = Array.from({ length: endPage - i }, (_, idx) => i + idx)
-          const copiedPages = await batchPdf.copyPages(pdfDoc, pageIndices)
+          const ocrResult = await TesseractOCR.extractFromImage(pageImages[i])
 
-          copiedPages.forEach(page => batchPdf.addPage(page))
-
-          const batchBytes = await batchPdf.save()
-          const batchBuffer = Buffer.from(batchBytes)
-
-          // Processar lote com Tesseract local
-          console.log(`   🔍 [Tesseract] Processando lote ${currentBatch}...`)
-          const tesseractResult = await TesseractOCR.extractFromPDF(batchBuffer)
-
-          if (tesseractResult.text.length > 10) {
-            extractedTexts.push(tesseractResult.text.replace(/\s+/g, ' ').trim())
-            console.log(`   ✅ Lote ${currentBatch}: ${tesseractResult.text.length} caracteres (${tesseractResult.confidence.toFixed(1)}% confiança)`)
+          if (ocrResult.text.length > 10) {
+            extractedTexts.push(ocrResult.text.replace(/\s+/g, ' ').trim())
+            console.log(`   ✅ Página ${i + 1}: ${ocrResult.text.length} caracteres (${ocrResult.confidence}% confiança)`)
           } else {
-            console.log(`   ⚠️ Lote ${currentBatch}: Texto insuficiente (${tesseractResult.text.length} chars)`)
+            console.log(`   ⚠️ Página ${i + 1}: Pouco texto extraído (${ocrResult.text.length} chars)`)
           }
 
-        } catch (batchError) {
-          console.error(`   ❌ Erro no lote ${currentBatch}:`, batchError)
-          console.warn(`   ⚠️ Pulando lote ${currentBatch} e continuando...`)
-          // Continua processamento dos outros lotes mesmo com erro
+        } catch (ocrError) {
+          console.error(`   ❌ Erro no OCR da página ${i + 1}:`, ocrError)
         }
       }
 
       const fullText = extractedTexts.join(' ')
-      console.log(`✅ Extração em lotes concluída: ${fullText.length} caracteres totais`)
+      console.log(`✅ Extração concluída: ${fullText.length} caracteres de ${extractedTexts.length}/${totalPages} páginas`)
 
       return { text: fullText, fileBase64: '' }
 
     } catch (error) {
-      console.error('❌ Erro no processamento em lotes:', error)
+      console.error('❌ Erro no processamento:', error)
       return { text: '', fileBase64: '' }
+    }
+  }
+
+  private async convertAllPDFPagesToImages(buffer: Buffer, totalPages: number): Promise<Buffer[]> {
+    try {
+      const { exec } = require('child_process')
+      const { promisify } = require('util')
+      const execAsync = promisify(exec)
+      const fs = require('fs')
+      const path = require('path')
+      const os = require('os')
+
+      const tmpDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'pdf-all-pages-'))
+      const pdfPath = path.join(tmpDir, 'input.pdf')
+      const outputPattern = path.join(tmpDir, 'page-%d.png')
+
+      await fs.promises.writeFile(pdfPath, buffer)
+
+      // Converter TODAS as páginas de uma vez com Ghostscript
+      const gsPath = '"C:\\Program Files\\gs\\gs10.06.0\\bin\\gswin64c.exe"'
+      const gsCmd = `${gsPath} -dSAFER -dBATCH -dNOPAUSE -sDEVICE=png16m -r300 -sOutputFile="${outputPattern}" "${pdfPath}"`
+
+      console.log('🔄 Convertendo PDF completo para imagens (300 DPI)...')
+      await execAsync(gsCmd, { timeout: 120000 }) // 2 minutos timeout
+
+      // Ler todas as imagens geradas
+      const pageBuffers: Buffer[] = []
+      for (let i = 1; i <= totalPages; i++) {
+        const imgPath = path.join(tmpDir, `page-${i}.png`)
+        if (await fs.promises.access(imgPath).then(() => true).catch(() => false)) {
+          const imgBuffer = await fs.promises.readFile(imgPath)
+          pageBuffers.push(imgBuffer)
+        } else {
+          console.warn(`   ⚠️ Imagem da página ${i} não encontrada`)
+        }
+      }
+
+      await fs.promises.rm(tmpDir, { recursive: true, force: true })
+
+      return pageBuffers
+
+    } catch (error) {
+      console.error('❌ Erro ao converter PDF para imagens:', error)
+      return []
+    }
+  }
+
+  private async repairPDFWithGhostscript(buffer: Buffer): Promise<Buffer | null> {
+    try {
+      const { exec } = require('child_process')
+      const { promisify } = require('util')
+      const execAsync = promisify(exec)
+      const fs = require('fs')
+      const path = require('path')
+      const os = require('os')
+
+      const tmpDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'pdf-repair-'))
+      const inputPath = path.join(tmpDir, 'input.pdf')
+      const outputPath = path.join(tmpDir, 'output.pdf')
+
+      await fs.promises.writeFile(inputPath, buffer)
+
+      // Tentar reparar com Ghostscript
+      const gsPath = '"C:\\Program Files\\gs\\gs10.06.0\\bin\\gswin64c.exe"'
+      await execAsync(`${gsPath} -dSAFER -dBATCH -dNOPAUSE -dNOCACHE -sDEVICE=pdfwrite -sOutputFile="${outputPath}" "${inputPath}"`, {
+        timeout: 30000
+      })
+
+      if (await fs.promises.access(outputPath).then(() => true).catch(() => false)) {
+        const repairedBuffer = await fs.promises.readFile(outputPath)
+        await fs.promises.rm(tmpDir, { recursive: true, force: true })
+        return repairedBuffer
+      }
+
+      await fs.promises.rm(tmpDir, { recursive: true, force: true })
+      return null
+
+    } catch (error) {
+      return null
+    }
+  }
+
+  private async extractTextFromSinglePage(pdfBuffer: Buffer, pageIndex: number): Promise<string> {
+    try {
+      // Converter página para imagem usando Ghostscript
+      const pageImage = await this.convertPDFPageToImageGS(pdfBuffer, pageIndex)
+
+      if (!pageImage) {
+        console.warn(`   ⚠️ Não conseguiu converter página ${pageIndex + 1} para imagem`)
+        return ''
+      }
+
+      // Fazer OCR na imagem
+      console.log(`   🔍 Executando OCR na página ${pageIndex + 1}...`)
+      const ocrResult = await TesseractOCR.extractFromImage(pageImage)
+
+      if (ocrResult.text.length > 5) {
+        return ocrResult.text
+      }
+
+      return ''
+
+    } catch (error) {
+      console.warn(`   ⚠️ Erro ao processar página ${pageIndex + 1}:`, error)
+      return ''
+    }
+  }
+
+  private async convertPDFPageToImageGS(pdfBuffer: Buffer, pageIndex: number): Promise<Buffer | null> {
+    try {
+      const { exec } = require('child_process')
+      const { promisify } = require('util')
+      const execAsync = promisify(exec)
+      const fs = require('fs')
+      const path = require('path')
+      const os = require('os')
+
+      const tmpDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'pdf-to-img-'))
+      const pdfPath = path.join(tmpDir, 'input.pdf')
+      const imgPath = path.join(tmpDir, 'page.png')
+
+      await fs.promises.writeFile(pdfPath, pdfBuffer)
+
+      // Converter página específica com Ghostscript (1-indexed)
+      const pageNum = pageIndex + 1
+      const gsPath = '"C:\\Program Files\\gs\\gs10.06.0\\bin\\gswin64c.exe"'
+      const gsCmd = `${gsPath} -dSAFER -dBATCH -dNOPAUSE -dFirstPage=${pageNum} -dLastPage=${pageNum} -sDEVICE=png16m -r300 -sOutputFile="${imgPath}" "${pdfPath}"`
+
+      await execAsync(gsCmd, { timeout: 15000 })
+
+      if (await fs.promises.access(imgPath).then(() => true).catch(() => false)) {
+        const imageBuffer = await fs.promises.readFile(imgPath)
+        await fs.promises.rm(tmpDir, { recursive: true, force: true })
+        return imageBuffer
+      }
+
+      await fs.promises.rm(tmpDir, { recursive: true, force: true })
+      return null
+
+    } catch (error) {
+      console.warn(`   ⚠️ Ghostscript falhou: ${error}`)
+      return null
     }
   }
 
@@ -905,20 +1144,65 @@ RESPOSTA:`
 
   private extractInfoFromOCR(ocrText: string): ExtractedInfo {
     const info: ExtractedInfo = { ocrExtractedText: ocrText }
-    
+
     // Extrair CPF
     const cpfMatch = ocrText.match(/CPF[:\s]*(\d{3}\.\d{3}\.\d{3}-\d{2}|\d{11})/)
     if (cpfMatch) info.cpf = cpfMatch[1]
-    
+
     // Extrair RG
     const rgMatch = ocrText.match(/RG[:\s]*(\d+)/)
     if (rgMatch) info.rg = rgMatch[1]
-    
+
     // Extrair CNH
     const cnhMatch = ocrText.match(/CNH[:\s]*(\d+)/)
     if (cnhMatch) info.cnh = cnhMatch[1]
-    
+
     return info
+  }
+
+  /**
+   * Normaliza o tipo de documento para comparação e agrupamento
+   * Remove números, acentos, artigos e variações para identificar tipos similares
+   *
+   * Exemplos:
+   * "07 ficha financeira" → "ficha financeira"
+   * "07 ficha financeira individual" → "ficha financeira"
+   * "07 ficha financeira de servidor público" → "ficha financeira servidor publico"
+   */
+  private normalizeDocumentType(documentType: string): string {
+    if (!documentType) return ''
+
+    return documentType
+      .toLowerCase()
+      .normalize('NFD').replace(/[\u0300-\u036f]/g, '') // Remove acentos
+      .replace(/^\d+\s*/, '') // Remove números iniciais (ex: "07 ")
+      .replace(/\b(de|da|do|dos|das)\b/g, '') // Remove artigos
+      .replace(/\b(individual|pessoal|completo|geral)\b/g, '') // Remove palavras genéricas
+      .replace(/[^\w\s]/g, '') // Remove pontuação
+      .replace(/\s+/g, ' ') // Normaliza espaços
+      .trim()
+  }
+
+  /**
+   * Verifica se dois tipos de documento são similares o suficiente para agrupamento
+   * Usa distância de palavras-chave para determinar similaridade
+   */
+  private areDocumentTypesSimilar(type1: string, type2: string): boolean {
+    const normalized1 = this.normalizeDocumentType(type1)
+    const normalized2 = this.normalizeDocumentType(type2)
+
+    // Se exatamente iguais após normalização
+    if (normalized1 === normalized2) return true
+
+    // Extrair palavras principais (> 3 caracteres)
+    const words1 = normalized1.split(' ').filter(w => w.length > 3)
+    const words2 = normalized2.split(' ').filter(w => w.length > 3)
+
+    // Se uma das palavras principais está na outra
+    const commonWords = words1.filter(w => words2.includes(w))
+
+    // Considera similar se tiver pelo menos 1 palavra em comum e a palavra principal for igual
+    return commonWords.length > 0 && words1[0] === words2[0]
   }
 
   // ==================== PROCESSAMENTO DE DOCUMENTOS ====================
@@ -931,10 +1215,20 @@ RESPOSTA:`
   ): Promise<ConversionResult> {
     try {
       console.log('🆔 Processando documento pessoal:', category.name)
-      
+
+      // ✅ Buscar projeto para garantir isolamento multi-tenant
+      const project = await prisma.project.findUnique({
+        where: { id: projectId },
+        select: { organizationId: true }
+      })
+
+      if (!project) {
+        throw new Error('Projeto não encontrado')
+      }
+
       // Processar documento individual primeiro
       const individualResult = await this.processSingleDocument(document, category, documentNumber)
-      
+
       if (!individualResult.success) {
         return individualResult
       }
@@ -942,8 +1236,8 @@ RESPOSTA:`
       // Armazenar para possível agrupamento
       const savedDocumentId = await this.storePersonalDocumentForGrouping(individualResult, category, projectId, document)
 
-      // Verificar se existem outros documentos pessoais do mesmo projeto
-      const personalDocsInProject = await this.getPersonalDocumentsFromProject(projectId)
+      // ✅ Verificar se existem outros documentos pessoais do mesmo projeto (com filtro de organização)
+      const personalDocsInProject = await this.getPersonalDocumentsFromProject(projectId, project.organizationId)
 
       console.log(`📊 Documentos pessoais no projeto ${projectId}:`, personalDocsInProject.length)
 
@@ -978,6 +1272,247 @@ RESPOSTA:`
     }
   }
 
+  /**
+   * Verifica se um documento deve ser agrupado com outros documentos similares do projeto
+   * Retorna true se encontrar documentos do mesmo tipo (normalizado)
+   */
+  private async shouldGroupDocument(
+    category: CategoryInfo,
+    projectId: number,
+    organizationId?: number
+  ): Promise<boolean> {
+    try {
+      if (!organizationId) return false
+
+      // Buscar projeto para isolamento multi-tenant
+      const project = await prisma.project.findUnique({
+        where: { id: projectId },
+        select: { organizationId: true }
+      })
+
+      if (!project || project.organizationId !== organizationId) return false
+
+      // Buscar documentos não agrupados do projeto
+      const existingDocs = await prisma.document.findMany({
+        where: {
+          projectId: projectId,
+          organizationId: organizationId,
+          isGrouped: false,
+          status: { in: ['validated', 'ocr_completed'] }
+        },
+        select: {
+          id: true,
+          documentType: true,
+          detectedDocumentType: true
+        }
+      })
+
+      // Verificar se existe algum documento similar
+      return existingDocs.some(doc => {
+        const existingType = doc.detectedDocumentType || doc.documentType || ''
+        const newType = category.name
+        return this.areDocumentTypesSimilar(existingType, newType)
+      })
+    } catch (error) {
+      console.error('❌ Erro ao verificar agrupamento:', error)
+      return false
+    }
+  }
+
+  /**
+   * Processa documento com agrupamento genérico (qualquer tipo de documento)
+   * Similar a handlePersonalDocument mas funciona para qualquer categoria
+   */
+  private async handleGroupableDocument(
+    document: DocumentToProcess,
+    category: CategoryInfo,
+    documentNumber: number,
+    projectId: number,
+    organizationId: number
+  ): Promise<ConversionResult> {
+    try {
+      console.log('🔗 Processando documento para agrupamento:', category.name)
+
+      // Buscar projeto para garantir isolamento multi-tenant
+      const project = await prisma.project.findUnique({
+        where: { id: projectId },
+        select: { organizationId: true, userId: true }
+      })
+
+      if (!project || project.organizationId !== organizationId) {
+        throw new Error('Projeto não encontrado ou não pertence à organização')
+      }
+
+      // Processar documento individual primeiro
+      const individualResult = await this.processSingleDocument(document, category, documentNumber)
+
+      if (!individualResult.success) {
+        return individualResult
+      }
+
+      // Armazenar documento para agrupamento
+      const savedDoc = await prisma.document.create({
+        data: {
+          projectId: projectId,
+          userId: project.userId,
+          organizationId: project.organizationId,
+          originalFilename: document.filename,
+          storedFilename: individualResult.smartFilename || 'documento.pdf',
+          smartFilename: individualResult.smartFilename,
+          documentType: category.code,
+          detectedDocumentType: category.name,
+          documentNumber: 1,
+          mimeType: document.mimeType,
+          originalSizeBytes: document.buffer.length,
+          isPersonalDocument: false,
+          isGrouped: false,
+          status: 'validated',
+          pdfPath: individualResult.pdfPath,
+          ocrText: document.ocrText,
+          pdfSizeBytes: individualResult.finalSizeBytes,
+          pageCount: individualResult.pageCount
+        }
+      })
+
+      console.log('✅ Documento salvo para agrupamento, ID:', savedDoc.id)
+
+      // ✅ CORREÇÃO: Buscar documentos similares não agrupados + documento agrupado anterior (se existir)
+      const similarDocs = await this.getSimilarDocumentsFromProject(
+        projectId,
+        organizationId,
+        category.name
+      )
+
+      // Buscar se já existe um documento agrupado do mesmo tipo
+      const existingGroupedDoc = await prisma.document.findFirst({
+        where: {
+          projectId: projectId,
+          organizationId: organizationId,
+          isGrouped: false, // Documento agrupado não tem isGrouped=true
+          status: { in: ['validated', 'ocr_completed'] }
+        },
+        orderBy: { createdAt: 'desc' }
+      })
+
+      // Verificar se o documento agrupado existe e é do mesmo tipo
+      const hasExistingGroup = existingGroupedDoc &&
+        existingGroupedDoc.storedFilename.includes('agrupado') &&
+        this.areDocumentTypesSimilar(
+          existingGroupedDoc.detectedDocumentType || existingGroupedDoc.documentType,
+          category.name
+        )
+
+      console.log(`📊 Documentos similares no projeto ${projectId}:`, similarDocs.length)
+      if (hasExistingGroup) {
+        console.log(`📦 Encontrado documento agrupado anterior: ${existingGroupedDoc!.storedFilename}`)
+      }
+
+      // Se houver 2+ documentos similares, criar PDF agrupado
+      if (similarDocs.length >= 2) {
+        console.log('🔗 Agrupando documentos similares em PDF único...')
+
+        const groupedResult = await this.combinePersonalDocuments(similarDocs, projectId)
+
+        if (groupedResult.success) {
+          // ✅ DELETAR documento agrupado anterior (se existir)
+          if (hasExistingGroup && existingGroupedDoc) {
+            console.log(`🗑️ Deletando documento agrupado anterior (ID: ${existingGroupedDoc.id})`)
+
+            // Deletar arquivo físico
+            if (existingGroupedDoc.pdfPath) {
+              try {
+                const pathParts = existingGroupedDoc.pdfPath.split('/').filter(p => p.length > 0)
+                if (pathParts.length >= 2) {
+                  const filePath = pathParts.slice(-2).join('/')
+                  const { deleteFile } = await import('@/lib/storage-service')
+                  await deleteFile(filePath)
+                  console.log(`   ✅ Arquivo físico deletado: ${filePath}`)
+                }
+              } catch (error) {
+                console.warn(`   ⚠️ Erro ao deletar arquivo físico:`, error)
+              }
+            }
+
+            // Deletar registro do banco
+            await prisma.document.delete({
+              where: { id: existingGroupedDoc.id }
+            })
+            console.log(`   ✅ Registro deletado do banco`)
+          }
+
+          // Marcar todos os documentos individuais como agrupados
+          await prisma.document.updateMany({
+            where: {
+              id: { in: similarDocs.map(d => d.id) },
+              organizationId: organizationId
+            },
+            data: { isGrouped: true }
+          })
+
+          return {
+            ...groupedResult,
+            groupedDocuments: similarDocs.length,
+            savedDocumentId: savedDoc.id
+          }
+        }
+      }
+
+      // Retornar documento individual enquanto aguarda mais uploads
+      return {
+        ...individualResult,
+        shouldWaitForGrouping: true,
+        savedDocumentId: savedDoc.id
+      }
+
+    } catch (error) {
+      console.error('❌ Erro ao processar documento agrupável:', error)
+      throw error
+    }
+  }
+
+  /**
+   * Busca documentos similares (mesmo tipo normalizado) no projeto
+   */
+  private async getSimilarDocumentsFromProject(
+    projectId: number,
+    organizationId: number,
+    documentType: string
+  ): Promise<PendingPersonalDocument[]> {
+    try {
+      // Buscar todos os documentos não agrupados do projeto
+      const documents = await prisma.document.findMany({
+        where: {
+          projectId: projectId,
+          organizationId: organizationId,
+          isGrouped: false,
+          status: { in: ['validated', 'ocr_completed'] }
+        },
+        orderBy: { createdAt: 'asc' }
+      })
+
+      // Filtrar apenas documentos similares
+      const similarDocs = documents.filter(doc => {
+        const docType = doc.detectedDocumentType || doc.documentType || ''
+        return this.areDocumentTypesSimilar(docType, documentType)
+      })
+
+      // Mapear para o formato esperado
+      return similarDocs.map((doc) => ({
+        id: doc.id,
+        filename: doc.smartFilename || doc.storedFilename,
+        pdfPath: doc.pdfPath || `/documents/${doc.storedFilename}`,
+        pdfBuffer: Buffer.alloc(0),
+        documentType: doc.detectedDocumentType || doc.documentType,
+        projectId: doc.projectId,
+        createdAt: doc.createdAt
+      }))
+
+    } catch (error) {
+      console.error('❌ Erro ao buscar documentos similares:', error)
+      return []
+    }
+  }
+
   private async storePersonalDocumentForGrouping(
     result: ConversionResult,
     category: CategoryInfo,
@@ -998,6 +1533,7 @@ RESPOSTA:`
       await prisma.document.updateMany({
         where: {
           projectId: projectId,
+          organizationId: project.organizationId, // ✅ Isolamento multi-tenant
           isPersonalDocument: true,
           isGrouped: false,
           documentType: category.code
@@ -1040,13 +1576,14 @@ RESPOSTA:`
     }
   }
 
-  private async getPersonalDocumentsFromProject(projectId: number): Promise<PendingPersonalDocument[]> {
+  private async getPersonalDocumentsFromProject(projectId: number, organizationId: number): Promise<PendingPersonalDocument[]> {
     try {
       const documents = await prisma.document.findMany({
         where: {
           projectId: projectId,
+          organizationId: organizationId, // ✅ Isolamento multi-tenant
           isPersonalDocument: true,
-          OR: [{ isGrouped: false }],
+          isGrouped: false, // ✅ Simplificado (removido OR redundante)
           status: 'validated'
         },
         orderBy: { createdAt: 'asc' }
@@ -1231,7 +1768,7 @@ RESPOSTA:`
     console.log('✂️ Documento grande detectado, dividindo:', category.name)
     
     try {
-      const mainPdf = await this.createOptimizedPDF(document.buffer, document.mimeType, document.ocrText)
+      const mainPdf = await this.createOptimizedPDF(document.buffer, document.mimeType, document.ocrText, document.ocrWords)
       const pdfBytes = await mainPdf.save()
       
       const fileSizeMB = pdfBytes.length / (1024 * 1024)
@@ -1292,13 +1829,13 @@ RESPOSTA:`
           console.log('🔄 Tentando reprocessar o documento...')
 
           // Reprocessar se o PDF estiver corrompido
-          const pdfDoc = await this.createOptimizedPDF(document.buffer, document.mimeType, document.ocrText)
+          const pdfDoc = await this.createOptimizedPDF(document.buffer, document.mimeType, document.ocrText, document.ocrWords)
           const pdfBytes = await pdfDoc.save()
           pdfBuffer = Buffer.from(pdfBytes)
         }
       } else {
         // Para outros tipos, criar PDF otimizado
-        const pdfDoc = await this.createOptimizedPDF(document.buffer, document.mimeType, document.ocrText)
+        const pdfDoc = await this.createOptimizedPDF(document.buffer, document.mimeType, document.ocrText, document.ocrWords)
         const pdfBytes = await pdfDoc.save()
         pdfBuffer = Buffer.from(pdfBytes)
       }
@@ -1316,7 +1853,8 @@ RESPOSTA:`
   private async createOptimizedPDF(
     buffer: Buffer,
     mimeType: string,
-    ocrText?: string
+    ocrText?: string,
+    ocrWords?: Array<{ text: string; x: number; y: number; width: number; height: number; confidence: number }>
   ): Promise<PDFDocument> {
     const pdfDoc = await PDFDocument.create()
 
@@ -1330,7 +1868,7 @@ RESPOSTA:`
       
     } else if (mimeType.startsWith('image/')) {
       // Imagem - converter para PDF
-      await this.addImageToPDF(pdfDoc, buffer, ocrText)
+      await this.addImageToPDF(pdfDoc, buffer, ocrText, ocrWords)
       
     } else if (mimeType.includes('text/')) {
       console.log('📄 Criando PDF com texto...')
@@ -1355,7 +1893,12 @@ RESPOSTA:`
     return pdfDoc
   }
 
-  private async addImageToPDF(pdfDoc: PDFDocument, buffer: Buffer, ocrText?: string): Promise<void> {
+  private async addImageToPDF(
+    pdfDoc: PDFDocument,
+    buffer: Buffer,
+    ocrText?: string,
+    ocrWords?: Array<{ text: string; x: number; y: number; width: number; height: number; confidence: number }>
+  ): Promise<void> {
     try {
       // ✅ DESABILITADO: Rotação automática removida - usuário fará manualmente via UI
       console.log('📄 [PDF] Adicionando imagem ao PDF...')
@@ -1400,11 +1943,44 @@ RESPOSTA:`
       page.drawImage(image, { x, y, width: drawWidth, height: drawHeight })
 
       // Adicionar texto invisível para busca (se OCR disponível)
-      if (ocrText) {
-        page.drawText(ocrText, {
-          x: 0, y: height - 10, size: 1, color: rgb(1, 1, 1), // Branco (invisível)
-          opacity: 0.01, maxWidth: width
-        })
+      if (ocrWords && ocrWords.length > 0) {
+        // Desenhar cada palavra nas coordenadas exatas
+        const scaleX = drawWidth / image.width
+        const scaleY = drawHeight / image.height
+
+        for (const word of ocrWords) {
+          const scaledX = x + (word.x * scaleX)
+          const scaledY = y + drawHeight - (word.y * scaleY) - (word.height * scaleY)
+
+          try {
+            const cleanText = PDFConverter.cleanTextForWinAnsi(word.text)
+            if (cleanText) {
+              page.drawText(cleanText, {
+                x: scaledX,
+                y: scaledY,
+                size: 1,
+                color: rgb(1, 1, 1),
+                opacity: 0.01
+              })
+            }
+          } catch (drawError) {
+            // Ignorar palavras que não podem ser desenhadas
+            console.warn('⚠️ Palavra ignorada (encoding):', word.text.substring(0, 20))
+          }
+        }
+      } else if (ocrText) {
+        // Fallback: texto simples sem coordenadas
+        try {
+          const cleanText = PDFConverter.cleanTextForWinAnsi(ocrText)
+          if (cleanText) {
+            page.drawText(cleanText, {
+              x: 0, y: height - 10, size: 1, color: rgb(1, 1, 1),
+              opacity: 0.01, maxWidth: width
+            })
+          }
+        } catch (drawError) {
+          console.warn('⚠️ Não foi possível adicionar texto OCR (encoding incompatível)')
+        }
       }
 
     } catch (error) {
@@ -1422,18 +1998,29 @@ RESPOSTA:`
     const lineHeight = 14
 
     for (const line of lines) {
-      if (y < 50) {
-        // Nova página
-        const newPage = pdfDoc.addPage(PageSizes.A4)
-        y = newPage.getSize().height - 50
+      // Limpar linha para compatibilidade WinAnsi
+      const cleanLine = PDFConverter.cleanTextForWinAnsi(line)
+      if (!cleanLine) {
+        y -= lineHeight
+        continue
+      }
 
-        newPage.drawText(line, {
-          x: 50, y, size: 10, maxWidth: width - 100
-        })
-      } else {
-        page.drawText(line, {
-          x: 50, y, size: 10, maxWidth: width - 100
-        })
+      try {
+        if (y < 50) {
+          // Nova página
+          const newPage = pdfDoc.addPage(PageSizes.A4)
+          y = newPage.getSize().height - 50
+
+          newPage.drawText(cleanLine, {
+            x: 50, y, size: 10, maxWidth: width - 100
+          })
+        } else {
+          page.drawText(cleanLine, {
+            x: 50, y, size: 10, maxWidth: width - 100
+          })
+        }
+      } catch (drawError) {
+        console.warn('⚠️ Linha ignorada (encoding):', cleanLine.substring(0, 50))
       }
 
       y -= lineHeight
@@ -1670,11 +2257,27 @@ RESPOSTA:`
         originalDocument.ocrText
       )
 
+      console.log('📦 ===== RETORNANDO RESULTADO =====')
+      console.log('   OCR Text:', originalDocument.ocrText ? originalDocument.ocrText.length + ' chars' : 'VAZIO')
+      console.log('   Smart Filename:', smartFilename || filename)
+      console.log('   Categoria:', category.name)
+
+      // ✅ Calcular nível de qualidade do OCR
+      const ocrQuality = originalDocument.ocrQualityMetrics
+      const qualityLevel: 'excellent' | 'good' | 'poor' | 'failed' =
+        !ocrQuality || ocrQuality.confidence === 0 ? 'failed' :
+        ocrQuality.confidence >= 90 ? 'excellent' :
+        ocrQuality.confidence >= 70 ? 'good' : 'poor'
+
       return {
         success: true,
         pdfPath: publicURL,
         pdfBuffer,
         ocrText: originalDocument.ocrText || '',
+        ocrConfidence: ocrQuality?.confidence || 0,
+        ocrCharactersExtracted: ocrQuality?.charactersExtracted || 0,
+        ocrPagesProcessed: ocrQuality?.pagesProcessed || 1,
+        ocrQualityLevel: qualityLevel,
         pageCount: 1,
         finalSizeBytes: pdfBuffer.length,
         smartFilename: smartFilename || filename, // Fallback para o filename técnico
@@ -1904,9 +2507,9 @@ RESPOSTA:`
   /**
    * Método estático para criar instância inicializada
    */
-  static async create(systemName: string): Promise<PDFConverter> {
+  static async create(systemName: string, organizationId?: number): Promise<PDFConverter> {
     const converter = new PDFConverter(systemName)
-    await converter.init()
+    await converter.init(organizationId)
     return converter
   }
 }
