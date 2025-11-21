@@ -73,6 +73,35 @@ export class TesseractOCR {
   /**
    * Extrair texto usando Tesseract (método original)
    */
+  // private static async extractWithTesseract(buffer: Buffer, startTime: number): Promise<OCRResult> {
+  //   try {
+  //     console.log('🔍 ===== TESSERACT NODE OCR =====')
+  //     console.log('   Tamanho do buffer:', buffer.length, 'bytes')
+
+  //     // Pré-processar imagem
+  //     const processedBuffer = await this.preprocessImage(buffer)
+  //     console.log('   Imagem processada:', processedBuffer.length, 'bytes')
+
+  //     // Salvar temporariamente (node-tesseract-ocr precisa de arquivo)
+  //     const tmpDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'ocr-'))
+  //     const tmpFile = path.join(tmpDir, 'image.png')
+  //     await fs.promises.writeFile(tmpFile, processedBuffer)
+  //     console.log('   Arquivo temporário:', tmpFile)
+
+  //     // Executar OCR
+  //     // Configurar PATH manualmente para esta execução
+  //     process.env.PATH = `C:\\Program Files\\Tesseract-OCR;${process.env.PATH}`
+
+  //     // ✅ Configuração OTIMIZADA para documentos escaneados/formulários
+  //     const config = {
+  //       lang: 'por+eng',
+  //       oem: 1,  // LSTM only (melhor para texto)
+  //       psm: 6,  // Uniform block of text (melhor para documentos estruturados)
+  //     }
+
+  //     console.log('   Config OCR:', config)
+  //     console.log('   Executando Tesseract...')
+
   private static async extractWithTesseract(buffer: Buffer, startTime: number): Promise<OCRResult> {
     try {
       console.log('🔍 ===== TESSERACT NODE OCR =====')
@@ -89,8 +118,12 @@ export class TesseractOCR {
       console.log('   Arquivo temporário:', tmpFile)
 
       // Executar OCR
-      // Configurar PATH manualmente para esta execução
-      process.env.PATH = `C:\\Program Files\\Tesseract-OCR;${process.env.PATH}`
+      // --- CORREÇÃO FEITA AQUI ---
+      // Só injeta o caminho do Windows se estiver rodando no Windows.
+      // No Linux, o Tesseract já está no PATH global (/usr/bin/tesseract).
+      if (process.platform === 'win32') {
+        process.env.PATH = `C:\\Program Files\\Tesseract-OCR;${process.env.PATH}`
+      }
 
       // ✅ Configuração OTIMIZADA para documentos escaneados/formulários
       const config = {
@@ -101,7 +134,7 @@ export class TesseractOCR {
 
       console.log('   Config OCR:', config)
       console.log('   Executando Tesseract...')
-
+    
       // Extrair texto
       const text = await tesseract.recognize(tmpFile, config)
 
@@ -110,8 +143,13 @@ export class TesseractOCR {
       const tesseractCmd = `tesseract "${tmpFile}" "${tsvFile.replace('.tsv', '')}" -l por+eng --oem 1 --psm 6 tsv`
 
       try {
-        await execAsync(tesseractCmd, { env: { ...process.env, PATH: `C:\\Program Files\\Tesseract-OCR;${process.env.PATH}` } })
+        //await execAsync(tesseractCmd, { env: { ...process.env, PATH: `C:\\Program Files\\Tesseract-OCR;${process.env.PATH}` } })
+        // Define o ambiente baseado no sistema operacional
+      const envOptions = process.platform === 'win32'
+      ? { ...process.env, PATH: `C:\\Program Files\\Tesseract-OCR;${process.env.PATH}` }
+      : { ...process.env }; // No Linux usa o env padrão sem alterar
 
+       await execAsync(tesseractCmd, { env: envOptions })
         const tsvContent = await fs.promises.readFile(tsvFile, 'utf-8')
         const words = this.parseTSV(tsvContent)
 
@@ -259,7 +297,10 @@ export class TesseractOCR {
       await fs.promises.writeFile(pdfPath, buffer)
 
       // Converter TODAS as páginas de uma vez com Ghostscript (alta resolução)
-      const gsPath = '"C:\\Program Files\\gs\\gs10.06.0\\bin\\gswin64c.exe"'
+      // const gsPath = '"C:\\Program Files\\gs\\gs10.06.0\\bin\\gswin64c.exe"'
+      const gsPath = process.platform === 'win32' 
+    ? '"C:\\Program Files\\gs\\gs10.06.0\\bin\\gswin64c.exe"' 
+    : 'gs';
       const gsCmd = `${gsPath} -dSAFER -dBATCH -dNOPAUSE -sDEVICE=png16m -r300 -sOutputFile="${outputPattern}" "${pdfPath}"`
 
       console.log('🔄 Executando Ghostscript...')
