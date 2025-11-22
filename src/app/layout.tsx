@@ -6,7 +6,7 @@ import "./globals.css";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "Sistema Jurídico",
+  title: "ADV DocMaster",
   description: "Sistema completo para gestão de processos e documentos jurídicos",
 };
 
