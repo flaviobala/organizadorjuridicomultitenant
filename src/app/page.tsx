@@ -16,11 +16,14 @@ export default function LandingPage() {
             {/* Texto Principal */}
             <div>
               <h1 className="text-4xl font-extrabold tracking-tight text-gray-900 sm:text-6xl">
-                Menos burocracia, mais advocacia.
+                O organizador que todo advogado precisa.
               </h1>
               <p className="mt-6 text-lg leading-8 text-gray-600">
-                Organize seus processos, documentos, clientes e prazos em uma plataforma única, 
-                segura e fácil de usar.
+                Converte arquivos em PDFs limpos, organiza tudo rapido e já deixa no ponto.
+              </p>
+               <p className="mt-6 text-lg leading-8 text-gray-600">
+                Entrega a história do caso pronta para uso, sem esforço e sem enrolação.
+                Libera o advogado do trabalho chato e acelera o andamento do escritório de verdade.
               </p>
               <div className="mt-10">
                 <Link
@@ -48,7 +51,7 @@ export default function LandingPage() {
                <img
                   src="/dashboard.png"
                   alt="Imagem ilustrativa do sistema jurídico"
-                  className="w-full h-auto rounded-lg"
+                  className="w-full h-85 rounded-lg"
                 />
               </div>
             </div>
