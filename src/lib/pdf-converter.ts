@@ -1859,13 +1859,75 @@ RESPOSTA:`
     const pdfDoc = await PDFDocument.create()
 
     if (mimeType === 'application/pdf') {
-      // PDF existente - apenas copiar páginas
+      // PDF existente - copiar páginas e adicionar OCR se disponível
       console.log('📄 Copiando páginas do PDF existente...')
       const existingPdf = await PDFDocument.load(buffer, { ignoreEncryption: true })
       const pageIndices = existingPdf.getPageIndices()
       const copiedPages = await pdfDoc.copyPages(existingPdf, pageIndices)
       copiedPages.forEach(page => pdfDoc.addPage(page))
-      
+
+      // ✅ NOVO: Adicionar camada de texto OCR se disponível (para PDFs escaneados)
+      if (ocrText && ocrText.length > 10) {
+        console.log(`📝 [PDF Pesquisável] Adicionando camada OCR em PDF escaneado...`)
+        console.log(`   Páginas: ${copiedPages.length}, Texto OCR: ${ocrText.length} caracteres`)
+
+        // Se tiver coordenadas de palavras, usar
+        if (ocrWords && ocrWords.length > 0) {
+          console.log(`   Palavras com coordenadas: ${ocrWords.length}`)
+          // Adicionar palavras na primeira página (assumindo PDF de 1 página do upload)
+          const firstPage = pdfDoc.getPages()[0]
+          const { width, height } = firstPage.getSize()
+
+          let wordsAdded = 0
+          for (const word of ocrWords) {
+            try {
+              const cleanText = PDFConverter.cleanTextForWinAnsi(word.text)
+              if (cleanText) {
+                // Coordenadas do OCR já estão em pixels da imagem original
+                // Precisamos mapear para o espaço do PDF
+                const scaledX = (word.x / 1654) * width // 1654 = largura A4 em 200 DPI
+                const scaledY = height - ((word.y / 2339) * height) // 2339 = altura A4 em 200 DPI
+                const fontSize = Math.max(1, (word.height / 2339) * height)
+
+                firstPage.drawText(cleanText, {
+                  x: scaledX,
+                  y: scaledY,
+                  size: fontSize,
+                  color: rgb(0, 0, 0),
+                  opacity: 0 // Totalmente transparente
+                })
+                wordsAdded++
+              }
+            } catch (drawError) {
+              // Ignorar palavras com problemas de encoding
+            }
+          }
+          console.log(`✅ [PDF Pesquisável] ${wordsAdded} palavras adicionadas ao PDF escaneado`)
+        } else {
+          // Fallback: adicionar texto completo de forma invisível
+          console.log(`   Adicionando texto completo (sem coordenadas)`)
+          try {
+            const firstPage = pdfDoc.getPages()[0]
+            const { width, height } = firstPage.getSize()
+            const cleanText = PDFConverter.cleanTextForWinAnsi(ocrText)
+
+            if (cleanText) {
+              firstPage.drawText(cleanText, {
+                x: 0,
+                y: height - 10,
+                size: 1,
+                color: rgb(0, 0, 0),
+                opacity: 0,
+                maxWidth: width
+              })
+              console.log(`✅ [PDF Pesquisável] Texto OCR adicionado ao PDF escaneado`)
+            }
+          } catch (drawError) {
+            console.warn('⚠️ Não foi possível adicionar texto OCR ao PDF')
+          }
+        }
+      }
+
     } else if (mimeType.startsWith('image/')) {
       // Imagem - converter para PDF
       await this.addImageToPDF(pdfDoc, buffer, ocrText, ocrWords)
@@ -1942,40 +2004,51 @@ RESPOSTA:`
       // Desenhar imagem
       page.drawImage(image, { x, y, width: drawWidth, height: drawHeight })
 
-      // Adicionar texto invisível para busca (se OCR disponível)
+      // ✅ MELHORADO: Adicionar texto invisível para busca (se OCR disponível)
+      console.log(`📝 [PDF Pesquisável] Adicionando camada de texto invisível...`)
+      console.log(`   Palavras detectadas: ${ocrWords?.length || 0}`)
+
       if (ocrWords && ocrWords.length > 0) {
         // Desenhar cada palavra nas coordenadas exatas
         const scaleX = drawWidth / image.width
         const scaleY = drawHeight / image.height
 
+        let wordsAdded = 0
         for (const word of ocrWords) {
           const scaledX = x + (word.x * scaleX)
           const scaledY = y + drawHeight - (word.y * scaleY) - (word.height * scaleY)
 
+          // Calcular tamanho de fonte baseado na altura da palavra
+          const fontSize = Math.max(1, (word.height * scaleY))
+
           try {
             const cleanText = PDFConverter.cleanTextForWinAnsi(word.text)
             if (cleanText) {
+              // ✅ Usar texto TOTALMENTE TRANSPARENTE (renderingMode 3 = invisible)
               page.drawText(cleanText, {
                 x: scaledX,
                 y: scaledY,
-                size: 1,
-                color: rgb(1, 1, 1),
-                opacity: 0.01
+                size: fontSize,
+                color: rgb(0, 0, 0), // Cor não importa pois será invisível
+                opacity: 0 // Totalmente transparente
               })
+              wordsAdded++
             }
           } catch (drawError) {
             // Ignorar palavras que não podem ser desenhadas
             console.warn('⚠️ Palavra ignorada (encoding):', word.text.substring(0, 20))
           }
         }
+        console.log(`✅ [PDF Pesquisável] ${wordsAdded} palavras adicionadas como texto invisível`)
       } else if (ocrText) {
         // Fallback: texto simples sem coordenadas
+        console.log(`   Usando texto completo (sem coordenadas): ${ocrText.length} caracteres`)
         try {
           const cleanText = PDFConverter.cleanTextForWinAnsi(ocrText)
           if (cleanText) {
             page.drawText(cleanText, {
-              x: 0, y: height - 10, size: 1, color: rgb(1, 1, 1),
-              opacity: 0.01, maxWidth: width
+              x: 0, y: height - 10, size: 1, color: rgb(0, 0, 0),
+              opacity: 0, maxWidth: width
             })
           }
         } catch (drawError) {

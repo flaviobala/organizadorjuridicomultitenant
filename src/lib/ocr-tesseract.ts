@@ -1,8 +1,14 @@
 /**
- * OCR com estratégia inteligente
- * 1. Google Cloud Vision API (se disponível) - Melhor qualidade para documentos jurídicos
- * 2. Tesseract OCR local (fallback gratuito) - Mais estável que tesseract.js
- * Prioriza Google Vision para máxima precisão em documentos escaneados
+ * OCR com estratégia inteligente em cascata
+ *
+ * Estratégia de fallback automático:
+ * 1. Google Vision API (principal) - 95-98% precisão, pago
+ * 2. Tesseract (fallback) - 60-80% precisão, gratuito, local
+ *
+ * Benefícios:
+ * - Melhor qualidade com Google Vision quando disponível
+ * - Tesseract como fallback sempre disponível
+ * - Sem interrupções no serviço se Google Vision falhar ou ficar sem créditos
  */
 
 import tesseract from 'node-tesseract-ocr'
@@ -35,38 +41,37 @@ export interface OCRResult {
 
 export class TesseractOCR {
   /**
-   * Extrair texto de uma imagem usando estratégia inteligente:
-   * 1. Google Vision (se disponível) - Melhor para docs jurídicos
-   * 2. Tesseract (fallback) - Gratuito mas menos preciso
+   * Extrair texto de uma imagem usando estratégia em cascata:
+   * 1. Google Vision API (principal) - melhor qualidade
+   * 2. Tesseract (fallback) - qualidade média, gratuito
    */
   static async extractFromImage(buffer: Buffer): Promise<OCRResult> {
     const startTime = Date.now()
 
-    // 🎯 ESTRATÉGIA: Google Vision primeiro (se disponível)
-    if (GoogleVisionOCR.isAvailable()) {
-      console.log('🌟 [Estratégia] Google Vision disponível - usando como primário')
+    // 🥇 ESTRATÉGIA 1: Tentar Google Vision primeiro (melhor qualidade)
+    console.log('🌐 [Estratégia] Tentando Google Vision...')
+    try {
+      const googleAvailable = await GoogleVisionOCR.isAvailable()
 
-      try {
+      if (googleAvailable) {
         const googleResult = await GoogleVisionOCR.extractFromImage(buffer)
 
-        // Se Google Vision teve sucesso razoável, usar o resultado
-        if (googleResult.text.length > 10 && googleResult.confidence >= 50) {
+        // Se Google Vision teve sucesso, usar o resultado
+        if (googleResult.text.length > 5 && googleResult.confidence >= 50) {
           console.log('✅ [Estratégia] Google Vision bem-sucedido - usando resultado')
           return googleResult
         }
 
-        // Se Google Vision falhou, tentar Tesseract como fallback
-        console.log('⚠️ [Estratégia] Google Vision com resultado fraco - tentando Tesseract como fallback')
-        return await this.extractWithTesseract(buffer, startTime)
-
-      } catch (error) {
-        console.error('❌ [Estratégia] Google Vision falhou - usando Tesseract', error)
-        return await this.extractWithTesseract(buffer, startTime)
+        console.log('⚠️ [Estratégia] Google Vision com resultado fraco')
+      } else {
+        console.log('ℹ️ [Estratégia] Google Vision não configurado')
       }
+    } catch (error) {
+      console.error('❌ [Estratégia] Google Vision falhou:', error)
     }
 
-    // Se Google Vision não está disponível, usar Tesseract
-    console.log('ℹ️ [Estratégia] Google Vision não configurado - usando Tesseract')
+    // 🥈 ESTRATÉGIA 2: Usar Tesseract como fallback
+    console.log('📝 [Estratégia] Usando Tesseract como fallback')
     return await this.extractWithTesseract(buffer, startTime)
   }
 
