@@ -205,7 +205,7 @@ function RegisterForm() {
               <div className="text-sm text-blue-800">
                 <strong>Como funciona?</strong>
                 <p className="mt-1">Após criar sua conta, você será redirecionado para o checkout do MercadoPago para completar o pagamento.
-                Você poderá pagar com cartão de crédito, débito, PIX ou boleto bancário.</p>
+                Você poderá pagar com cartão de crédito e PIX.</p>
               </div>
             </div>
           </div>

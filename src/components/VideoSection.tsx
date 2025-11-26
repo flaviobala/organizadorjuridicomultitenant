@@ -16,16 +16,16 @@ export default function VideoSection() {
           <div className="relative rounded-2xl overflow-hidden shadow-2xl bg-gray-900">
             <div className="aspect-video">
               {/* Substitua o src abaixo pelo link do seu vídeo do YouTube/Vimeo */}
-              <iframe
+              {/* <iframe
                 className="w-full h-full"
-                src="https://www.youtube.com/embed/dQw4w9WgXcQ"
+                src="https://www.youtube.com/embed/SEU_VIDEO_AQUI"
                 title="Vídeo demonstrativo ADV DocMaster"
                 allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                 allowFullScreen
-              ></iframe>
+              ></iframe> */}
 
-              {/* Alternativa: Placeholder se não tiver vídeo ainda */}
-              {/* <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-blue-900 to-indigo-900">
+              {/* Alternativa: Placeholder até adicionar novo vídeo */}
+              <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-blue-900 to-indigo-900">
                 <div className="text-center">
                   <svg className="mx-auto h-20 w-20 text-white opacity-75 mb-4" fill="currentColor" viewBox="0 0 20 20">
                     <path d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" />
@@ -33,7 +33,7 @@ export default function VideoSection() {
                   <p className="text-white text-xl font-semibold">Vídeo em breve</p>
                   <p className="text-blue-200 mt-2">Estamos preparando um conteúdo incrível para você</p>
                 </div>
-              </div> */}
+              </div>
             </div>
           </div>
 
