@@ -531,7 +531,9 @@ export class PDFConverter {
       await fs.promises.writeFile(pdfPath, buffer)
 
       // Converter TODAS as páginas de uma vez com Ghostscript
-      const gsPath = '"C:\\Program Files\\gs\\gs10.06.0\\bin\\gswin64c.exe"'
+      const gsPath = process.platform === 'win32'
+        ? '"C:\\Program Files\\gs\\gs10.06.0\\bin\\gswin64c.exe"'
+        : 'gs'
       const gsCmd = `${gsPath} -dSAFER -dBATCH -dNOPAUSE -sDEVICE=png16m -r300 -sOutputFile="${outputPattern}" "${pdfPath}"`
 
       console.log('🔄 Convertendo PDF completo para imagens (300 DPI)...')
@@ -575,7 +577,9 @@ export class PDFConverter {
       await fs.promises.writeFile(inputPath, buffer)
 
       // Tentar reparar com Ghostscript
-      const gsPath = '"C:\\Program Files\\gs\\gs10.06.0\\bin\\gswin64c.exe"'
+      const gsPath = process.platform === 'win32'
+        ? '"C:\\Program Files\\gs\\gs10.06.0\\bin\\gswin64c.exe"'
+        : 'gs'
       await execAsync(`${gsPath} -dSAFER -dBATCH -dNOPAUSE -dNOCACHE -sDEVICE=pdfwrite -sOutputFile="${outputPath}" "${inputPath}"`, {
         timeout: 30000
       })
@@ -637,7 +641,9 @@ export class PDFConverter {
 
       // Converter página específica com Ghostscript (1-indexed)
       const pageNum = pageIndex + 1
-      const gsPath = '"C:\\Program Files\\gs\\gs10.06.0\\bin\\gswin64c.exe"'
+      const gsPath = process.platform === 'win32'
+        ? '"C:\\Program Files\\gs\\gs10.06.0\\bin\\gswin64c.exe"'
+        : 'gs'
       const gsCmd = `${gsPath} -dSAFER -dBATCH -dNOPAUSE -dFirstPage=${pageNum} -dLastPage=${pageNum} -sDEVICE=png16m -r300 -sOutputFile="${imgPath}" "${pdfPath}"`
 
       await execAsync(gsCmd, { timeout: 15000 })

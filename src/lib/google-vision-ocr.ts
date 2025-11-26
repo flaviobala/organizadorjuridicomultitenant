@@ -164,7 +164,9 @@ export class GoogleVisionOCR {
       await fs.promises.writeFile(pdfPath, buffer)
 
       // Converter PDF para imagens em alta resolução (300 DPI)
-      const gsPath = '"C:\\Program Files\\gs\\gs10.06.0\\bin\\gswin64c.exe"'
+      const gsPath = process.platform === 'win32'
+        ? '"C:\\Program Files\\gs\\gs10.06.0\\bin\\gswin64c.exe"'
+        : 'gs'
       const gsCmd = `${gsPath} -dSAFER -dBATCH -dNOPAUSE -sDEVICE=png16m -r300 -sOutputFile="${outputPattern}" "${pdfPath}"`
 
       console.log('🔄 [Google Vision] Convertendo PDF para imagens (300 DPI)...')
