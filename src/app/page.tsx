@@ -1,11 +1,11 @@
 import Navbar from '@/components/Navbar'
 import Hero from '@/components/Hero'
 import VideoSection from '@/components/VideoSection'
-import LeadSection from '@/components/LeadSection'
+import ProblemSection from '@/components/ProblemSection'
 import StorySection from '@/components/StorySection'
 import FeaturesSection from '@/components/FeaturesSection'
 import TestimonialsSection from '@/components/TestimonialsSection'
-import PricingSection from '@/components/PricingSection'
+import BenefitsSection from '@/components/BenefitsSection'
 import OfferSection from '@/components/OfferSection'
 import FAQSection from '@/components/FAQSection'
 import Footer from '@/components/Footer'
@@ -16,11 +16,11 @@ export default function LandingPage() {
       <Navbar />
       <Hero />
       <VideoSection />
-      <LeadSection />
+      <ProblemSection />
       <StorySection />
       <FeaturesSection />
       <TestimonialsSection />
-      <PricingSection />
+      <BenefitsSection />
       <OfferSection />
       <FAQSection />
       <Footer />
