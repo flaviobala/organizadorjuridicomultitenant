@@ -279,9 +279,21 @@ export default function UploadDocumentsPage({
         const fileKey = `file_${i}`
 
         setUploadProgress(prev => ({ ...prev, [fileKey]: 0 }))
+
+        // Estimar tempo baseado no tamanho do arquivo
+        const fileSizeMB = file.size / (1024 * 1024)
+        let timeEstimate = ''
+        if (fileSizeMB > 15) {
+          timeEstimate = ' ⏱️ Tempo estimado: 10-30 minutos para documentos extensos.'
+        } else if (fileSizeMB > 5) {
+          timeEstimate = ' ⏱️ Tempo estimado: 3-10 minutos.'
+        } else if (fileSizeMB > 1) {
+          timeEstimate = ' ⏱️ Tempo estimado: 1-3 minutos.'
+        }
+
         setMessage({
           type: 'info',
-          text: `🧠 Analisando documento ${i + 1}/${previewFiles.length}: ${file.name}...`
+          text: `🧠 Processando documento ${i + 1}/${previewFiles.length}: ${file.name} (${fileSizeMB.toFixed(1)}MB)${timeEstimate}`
         })
 
         // Aplicar rotação se necessário
@@ -304,9 +316,10 @@ export default function UploadDocumentsPage({
 
         setUploadProgress(prev => ({ ...prev, [fileKey]: 25 }))
 
-        // ✅ Timeout de 5 minutos para PDFs grandes com muitas páginas
+        // ✅ Timeout de 30 minutos para PDFs grandes com muitas páginas
+        // Documentos jurídicos extensos podem ter centenas de páginas e precisam de tempo adequado
         const controller = new AbortController()
-        const timeoutId = setTimeout(() => controller.abort(), 300000) // 5 minutos
+        const timeoutId = setTimeout(() => controller.abort(), 1800000) // 30 minutos
 
         const response = await fetch('/api/documents/upload', {
           method: 'POST',
@@ -371,8 +384,8 @@ export default function UploadDocumentsPage({
       // Detectar timeout do AbortController
       if (error instanceof Error && error.name === 'AbortError') {
         setMessage({
-          type: 'error',
-          text: 'Timeout: O processamento está demorando mais que 5 minutos. O servidor continua processando em background. Aguarde alguns minutos e atualize a página.'
+          type: 'warning',
+          text: '⏱️ Processamento de documento extenso em andamento. PDFs com muitas páginas podem levar até 30 minutos. O servidor está processando todas as páginas. Aguarde ou atualize a página em alguns minutos para verificar o progresso.'
         })
       } else {
         setMessage({ type: 'error', text: error instanceof Error ? error.message : 'Erro no upload' })
