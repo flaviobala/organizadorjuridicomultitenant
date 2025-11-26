@@ -36,22 +36,6 @@ export default function VideoSection() {
               </div>
             </div>
           </div>
-
-          {/* Stats abaixo do vídeo */}
-          <div className="mt-12 grid grid-cols-3 gap-8 text-center">
-            <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl p-6 border border-blue-100">
-              <p className="text-3xl font-bold text-blue-600">3 min</p>
-              <p className="text-sm text-gray-600 mt-1">Para organizar um processo completo</p>
-            </div>
-            <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl p-6 border border-blue-100">
-              <p className="text-3xl font-bold text-blue-600">95%</p>
-              <p className="text-sm text-gray-600 mt-1">De precisão no OCR</p>
-            </div>
-            <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl p-6 border border-blue-100">
-              <p className="text-3xl font-bold text-blue-600">24/7</p>
-              <p className="text-sm text-gray-600 mt-1">Disponível sempre que precisar</p>
-            </div>
-          </div>
         </div>
       </div>
     </section>
