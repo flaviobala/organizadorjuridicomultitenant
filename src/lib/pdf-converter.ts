@@ -424,21 +424,10 @@ export class PDFConverter {
 
         console.log(`📄 Número de páginas: ${pageCount}`)
 
-        // PDFs muito grandes: limitar OCR
-        if (pageCount > 100) {
-          console.warn(`⚠️ PDF com ${pageCount} páginas - OCR limitado às primeiras 30 páginas`)
-          console.warn(`   💡 Processando apenas início do documento para categorização`)
-          return { useBatch: true, pageCount: 30 }
-        }
-
-        if (pageCount > 50) {
-          console.warn(`⚠️ PDF com ${pageCount} páginas - OCR limitado às primeiras 50 páginas`)
-          return { useBatch: true, pageCount: 50 }
-        }
-
+        // ✅ SEMPRE processar TODAS as páginas (documentos jurídicos são importantes!)
         // Processar em lotes se: > 5 páginas OU > 5MB
         if (pageCount > 5 || fileSizeMB > 5) {
-          console.log(`📦 PDF requer lotes: ${pageCount} páginas, ${fileSizeMB.toFixed(2)}MB`)
+          console.log(`📦 PDF grande: ${pageCount} páginas, ${fileSizeMB.toFixed(2)}MB - processando TODAS as páginas em lotes`)
           return { useBatch: true, pageCount }
         }
 
