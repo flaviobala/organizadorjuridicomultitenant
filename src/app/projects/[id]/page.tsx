@@ -142,20 +142,20 @@ export default function ProjectDetailPage({
   })
   const [showAddActionTypeModal, setShowAddActionTypeModal] = useState(false)
   const [newActionType, setNewActionType] = useState('')
-  const [actionTypes, setActionTypes] = useState([
-    'Acao de Indenizacao',
-    'Acao Trabalhista',
-    'Acao de Cobranca',
-    'Acao de Despejo',
-    'Acao Declaratoria',
-    'Acao Cautelar',
-    'Mandado de Seguranca',
-    'Habeas Corpus',
-    'Acao Penal',
-    'Acao Civil Publica',
-    'Execucao',
-    'Embargos',
-    'Recurso'
+  const [actionTypes, setActionTypes] = useState<Array<{id: string | number, name: string, description?: string, isDefault?: boolean}>>([
+    { id: '1', name: 'Acao de Indenizacao' },
+    { id: '2', name: 'Acao Trabalhista' },
+    { id: '3', name: 'Acao de Cobranca' },
+    { id: '4', name: 'Acao de Despejo' },
+    { id: '5', name: 'Acao Declaratoria' },
+    { id: '6', name: 'Acao Cautelar' },
+    { id: '7', name: 'Mandado de Seguranca' },
+    { id: '8', name: 'Habeas Corpus' },
+    { id: '9', name: 'Acao Penal' },
+    { id: '10', name: 'Acao Civil Publica' },
+    { id: '11', name: 'Execucao' },
+    { id: '12', name: 'Embargos' },
+    { id: '13', name: 'Recurso' }
   ])
 
   const form = useForm<EditProjectFormData>({
@@ -519,20 +519,20 @@ export default function ProjectDetailPage({
 
   const setDefaultActionTypes = () => {
     setActionTypes([
-      'Acao de Indenizacao',
-      'Acao Trabalhista',
-      'Acao de Cobranca',
-      'Acao de Despejo',
-      'Acao Declaratoria',
-      'Acao Cautelar',
-      'Mandado de Seguranca',
-      'Habeas Corpus',
-      'Acao Penal',
-      'Acao Civil Publica',
-      'Execucao',
-      'Embargos',
-      'Recurso',
-      'Outro'
+      { id: '1', name: 'Acao de Indenizacao' },
+      { id: '2', name: 'Acao Trabalhista' },
+      { id: '3', name: 'Acao de Cobranca' },
+      { id: '4', name: 'Acao de Despejo' },
+      { id: '5', name: 'Acao Declaratoria' },
+      { id: '6', name: 'Acao Cautelar' },
+      { id: '7', name: 'Mandado de Seguranca' },
+      { id: '8', name: 'Habeas Corpus' },
+      { id: '9', name: 'Acao Penal' },
+      { id: '10', name: 'Acao Civil Publica' },
+      { id: '11', name: 'Execucao' },
+      { id: '12', name: 'Embargos' },
+      { id: '13', name: 'Recurso' },
+      { id: '14', name: 'Outro' }
     ])
   }
 
@@ -542,7 +542,7 @@ export default function ProjectDetailPage({
       return
     }
 
-    if (actionTypes.some(a => a.toLowerCase() === newActionType.toLowerCase())) {
+    if (actionTypes.some(a => a.name.toLowerCase() === newActionType.toLowerCase())) {
       setMessage({ type: 'error', text: 'Tipo de ação já existe na lista' })
       return
     }
@@ -563,7 +563,8 @@ export default function ProjectDetailPage({
       const result = await response.json()
 
       if (result.success) {
-        const updatedActionTypes = [...actionTypes, newActionType.trim()]
+        const newActionTypeObj = result.actionType || { id: Date.now().toString(), name: newActionType.trim() }
+        const updatedActionTypes = [...actionTypes, newActionTypeObj]
         setActionTypes(updatedActionTypes)
         form.setValue('actionType', newActionType.trim())
         setMessage({ type: 'success', text: 'Tipo de ação adicionado com sucesso!' })
@@ -1236,8 +1237,8 @@ if (downloadedCount > 0) {
                       >
                         <option value="">Selecione o tipo de ação</option>
                         {actionTypes.map((action) => (
-                          <option key={action} value={action}>
-                            {action}
+                          <option key={action.id} value={action.name}>
+                            {action.name}
                           </option>
                         ))}
                       </select>

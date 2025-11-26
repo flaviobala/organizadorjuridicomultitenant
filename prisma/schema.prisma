@@ -66,6 +66,7 @@ model Organization {
   validations    DocumentValidation[]
   apiUsages      ApiUsage[]
   systems        SystemConfiguration[]
+  actionTypes    ActionType[]
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -278,11 +279,14 @@ model DocumentType {
 }
 
 model ActionType {
-  id          Int      @id @default(autoincrement())
-  name        String   @unique
-  description String?
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
+  id             Int          @id @default(autoincrement())
+  name           String
+  description    String?
+  organizationId Int          @map("organization_id")
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdAt      DateTime     @default(now()) @map("created_at")
+  updatedAt      DateTime     @updatedAt @map("updated_at")
 
+  @@unique([name, organizationId])
   @@map("action_types")
 }

@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { FaBalanceScale } from 'react-icons/fa'
+import Image from 'next/image'
 
 export default function Footer() {
   const currentYear = new Date().getFullYear()
@@ -29,14 +29,14 @@ export default function Footer() {
           {/* Coluna 1 - Logo e Descrição */}
           <div className="space-y-8">
             <Link href="/" className="flex items-center gap-2 text-white">
-              <FaBalanceScale className="h-8 w-8" />
-              <span className="font-bold text-xl">Sistema Jurídico</span>
+              <Image src="/logo-white.png" alt="ADV DocMaster" width={32} height={32} />
+              <span className="font-bold text-xl">ADV DOCMASTER</span>
             </Link>
             <p className="text-sm leading-6 text-gray-300">
               Transformando a gestão jurídica em uma experiência simples e eficiente.
             </p>
             <p className="text-sm leading-6 text-gray-300">
-              © {currentYear} Sistema Jurídico. Todos os direitos reservados.
+              © {currentYear} ADV DOCMASTER. Todos os direitos reservados.
             </p>
           </div>
 
@@ -77,8 +77,8 @@ export default function Footer() {
               <h3 className="text-sm font-semibold leading-6 text-white">Contato</h3>
               <ul role="list" className="mt-6 space-y-4">
                 <li>
-                  <a href="mailto:suporte@sistemajuridico.com.br" className="text-sm leading-6 text-gray-300 hover:text-white">
-                    suporte@sistemajuridico.com.br
+                  <a href="mailto:suporte@advconecta.com.br" className="text-sm leading-6 text-gray-300 hover:text-white">
+                    suporte@advconecta.com.br
                   </a>
                 </li>
                 {navigation.social.map((item) => (

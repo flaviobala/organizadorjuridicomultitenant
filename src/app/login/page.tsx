@@ -69,11 +69,12 @@ export default function LoginPage() {
           <div className="absolute inset-0 bg-gradient-to-br from-blue-900 to-blue-950 opacity-90"></div>
           <div className="relative z-10 flex flex-col justify-center items-center h-full p-12 text-white">
             <Image
-              src="/logo.png"
-              alt="Logo Principal"
+              src="/logo-white.png"
+              alt="ADV DocMaster"
               width={200}
               height={200}
-              className="rounded-lg"
+              className="drop-shadow-lg"
+              style={{ background: 'transparent' }}
             />
             <h2 className="mt-6 text-3xl font-bold text-center">
               Gestão jurídica completa para escritórios modernos

@@ -21,7 +21,8 @@
       "Bash(timeout 60 npx tsx:*)",
       "Bash(awk:*)",
       "Bash(cat:*)",
-      "Bash(psql:*)"
+      "Bash(psql:*)",
+      "Bash(set PGPASSWORD=21957@123)"
     ],
     "deny": [],
     "ask": []

@@ -179,6 +179,36 @@ export default function AdminDashboard() {
     return '👤'
   }
 
+  const handleDeleteUser = async (userId: number, userName: string, userEmail: string) => {
+    if (!confirm(`Tem certeza que deseja excluir o usuário:\n\n${userName}\n${userEmail}\n\nEsta ação não pode ser desfeita!`)) {
+      return
+    }
+
+    try {
+      const token = localStorage.getItem('token')
+      const response = await fetch(`/api/organization/users/${userId}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        alert(`Erro ao excluir usuário: ${data.error}`)
+        return
+      }
+
+      alert('Usuário excluído com sucesso!')
+      // Recarregar a lista de organizações
+      fetchOrganizations()
+    } catch (error) {
+      console.error('Erro ao excluir usuário:', error)
+      alert('Erro ao conectar com o servidor')
+    }
+  }
+
   const handleLogout = () => {
     localStorage.removeItem('token')
     router.push('/login')
@@ -570,11 +600,27 @@ export default function AdminDashboard() {
                                 <div className="text-sm text-gray-600">{user.email}</div>
                               </div>
                             </div>
-                            <span className={`px-3 py-1 text-xs font-semibold rounded-full ${
-                              user.role === 'admin' ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-800'
-                            }`}>
-                              {user.role}
-                            </span>
+                            <div className="flex items-center gap-3">
+                              <span className={`px-3 py-1 text-xs font-semibold rounded-full ${
+                                user.role === 'admin' ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-800'
+                              }`}>
+                                {user.role}
+                              </span>
+                              {user.role !== 'super_admin' && (
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    handleDeleteUser(user.id, user.name, user.email)
+                                  }}
+                                  className="p-2 text-red-600 hover:bg-red-100 rounded-lg transition-colors"
+                                  title="Excluir usuário"
+                                >
+                                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                  </svg>
+                                </button>
+                              )}
+                            </div>
                           </div>
                         ))}
                       </div>
@@ -603,6 +649,7 @@ export default function AdminDashboard() {
                   <th className="px-6 py-4 text-left text-xs font-bold text-white uppercase tracking-wider">Role</th>
                   <th className="px-6 py-4 text-left text-xs font-bold text-white uppercase tracking-wider">Organização</th>
                   <th className="px-6 py-4 text-left text-xs font-bold text-white uppercase tracking-wider">Cadastro</th>
+                  <th className="px-6 py-4 text-center text-xs font-bold text-white uppercase tracking-wider">Ações</th>
                 </tr>
               </thead>
               <tbody>
@@ -641,6 +688,18 @@ export default function AdminDashboard() {
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
                             {user.createdAt ? new Date(user.createdAt).toLocaleDateString('pt-BR') : '-'}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-center">
+                            <button
+                              onClick={() => handleDeleteUser(user.id, user.name, user.email)}
+                              className="inline-flex items-center px-3 py-1.5 text-sm text-red-600 hover:text-white hover:bg-red-600 border border-red-600 rounded-lg transition-colors"
+                              title="Excluir usuário"
+                            >
+                              <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                              </svg>
+                              Excluir
+                            </button>
                           </td>
                         </tr>
                       )

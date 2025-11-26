@@ -29,17 +29,17 @@ export default function FeaturesSection() {
   const features = [
     {
       title: "Upload Inteligente",
-      description: "Suporte para PDF, imagens e documentos do Word com OCR local usando Tesseract (processamento 100% no servidor).",
+      description: "Suporte para PDF, imagens e documentos do Word com OCR. (processamento 100% no servidor).",
       icon: <FaCloud />
     },
     {
-      title: "Categorização por IA",
-      description: "Identificação automática de tipos de documentos usando OpenAI (RG, CPF, procurações, contratos e mais).",
+      title: "Categorização Inteligente",
+      description: "Identificação automática de tipos de documentos (RG, CPF, procurações, contratos e mais).",
       icon: <FaRobot />
     },
     {
       title: "Agrupamento Automático",
-      description: "Documentos pessoais do mesmo titular são agrupados automaticamente para melhor organização.",
+      description: "Documentos da mesma categoria são agrupados automaticamente para melhor organização.",
       icon: <FaFolder />
     },
     {
