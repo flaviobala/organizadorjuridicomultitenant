@@ -24,7 +24,7 @@ export default function Hero() {
           <div className="mt-12">
             <Link
               href="/register"
-              className="inline-flex items-center justify-center rounded-lg bg-gradient-to-r from-indigo-500 to-purple-600 px-10 py-4 text-lg font-semibold text-white shadow-2xl hover:from-indigo-600 hover:to-purple-700 transition-all hover:scale-105 animate-pulse hover:animate-none"
+              className="inline-flex items-center justify-center rounded-lg bg-gradient-to-r from-indigo-500 to-purple-600 px-10 py-4 text-lg font-semibold text-white shadow-2xl hover:from-indigo-600 hover:to-purple-700 transition-all hover:scale-105 animate-pulse-fast hover:animate-none"
             >
               Quero Experimentar Agora →
             </Link>
