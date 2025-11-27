@@ -15,9 +15,6 @@ import {
   Scale,
   FilePlus
 } from 'lucide-react'
-import TokenUsageCard from '@/components/TokenUsageCard'
-import TokenUsageBadge from '@/components/TokenUsageBadge'
-import SubscriptionCard from '@/components/SubscriptionCard'
 
 interface Project {
   id: number
@@ -178,9 +175,6 @@ export default function DashboardPage() {
             </div>
 
             <div className="flex items-center space-x-4">
-              {/* Token Badge - Apenas para Administradores */}
-              {(userRole === 'admin' || userRole === 'super_admin') && <TokenUsageBadge />}
-
               {/* Botão de Painel de Administração - apenas para admins */}
               {(userRole === 'admin' || userRole === 'super_admin') && (
                 <button
@@ -282,14 +276,6 @@ export default function DashboardPage() {
             </div>
           </div>
         </div>
-
-        {/* Subscription and Token Usage Cards - Apenas para Administradores */}
-        {(userRole === 'admin' || userRole === 'super_admin') && (
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
-            <SubscriptionCard />
-            <TokenUsageCard />
-          </div>
-        )}
 
         {/* Actions Bar */}
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
