@@ -7,6 +7,7 @@ import { prisma } from './prisma'
  */
 export const PLAN_LIMITS = {
   free: {
+    maxTokens: -1, // Ilimitado (mantido para compatibilidade)
     maxDocuments: 15, // Teste grátis: 3 dias OU 50 documentos
     maxUsers: 1,
     trialDays: 3, // 3 dias de teste
@@ -14,12 +15,14 @@ export const PLAN_LIMITS = {
     features: ['basic_processing', 'ai_categorization', 'ocr']
   },
   basic: {
+    maxTokens: -1, // Ilimitado (mantido para compatibilidade)
     maxDocuments: 300, // 300 documentos por mês
     maxUsers: 1,
     hasValidation: false, // Sem validação de pertinência
     features: ['basic_processing', 'ai_categorization', 'batch_upload', 'ocr']
   },
   advanced: {
+    maxTokens: -1, // Ilimitado (mantido para compatibilidade)
     maxDocuments: 600, // 600 documentos por mês
     maxUsers: 3,
     hasValidation: true, // Validação de pertinência (300 docs/mês)
@@ -27,6 +30,7 @@ export const PLAN_LIMITS = {
     features: ['basic_processing', 'ai_categorization', 'batch_upload', 'ocr', 'ai_validation', 'usage_panel', 'priority_support']
   },
   complete: {
+    maxTokens: -1, // Ilimitado (mantido para compatibilidade)
     maxDocuments: 1200, // 1.200 documentos por mês
     maxUsers: 5,
     hasValidation: true, // Validação de pertinência ilimitada
