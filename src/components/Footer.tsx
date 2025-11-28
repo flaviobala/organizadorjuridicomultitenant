@@ -29,7 +29,7 @@ export default function Footer() {
           {/* Coluna 1 - Logo e Descrição */}
           <div className="space-y-8">
             <Link href="/" className="flex items-center gap-2 text-white">
-              <Image src="/logo-white.png" alt="ADV DocMaster" width={32} height={32} />
+              <Image src="/logo-footer.png" alt="ADV DocMaster" width={30} height={30} />
               <span className="font-bold text-xl">ADV DOCMASTER</span>
             </Link>
             <p className="text-sm leading-6 text-gray-300">

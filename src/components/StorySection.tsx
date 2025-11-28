@@ -22,7 +22,7 @@ export default function StorySection() {
               </p>
 
               <p className="mb-6">
-                Foi então que eu e meu amigo <strong>Flavio Henrique</strong>, programador e estudante de engenharia de software, para criar uma solução prática, acessível e altamente técnica para esse problema.
+                Foi então que eu e meu amigo <strong>Flávio Henrique</strong>, programador e estudante de engenharia de software, decidimos criar uma solução prática, acessível e altamente técnica para esse problema.
               </p>
 
               <div className="bg-gradient-to-r from-indigo-50 to-purple-50 border-l-4 border-indigo-600 rounded-r-xl p-6 my-8">

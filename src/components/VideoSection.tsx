@@ -2,14 +2,14 @@ export default function VideoSection() {
   return (
     <section id="video" className="bg-white py-16 sm:py-24">
       <div className="max-w-7xl mx-auto px-6 lg:px-8">
-        <div className="text-center mb-12">
+        {/* <div className="text-center mb-12">
           <h2 className="text-3xl font-bold tracking-tight text-gray-900 sm:text-4xl">
             Veja como é simples
           </h2>
           <p className="mt-4 text-lg text-gray-600">
-            Em menos de 3 minutos você entende como o ADV DocMaster vai revolucionar seu escritório
+            Em menos de 5 minutos você entende como o ADV DocMaster vai revolucionar seu escritório
           </p>
-        </div>
+        </div> */}
 
         <div className="max-w-4xl mx-auto">
           {/* Container do vídeo com aspect ratio 16:9 */}

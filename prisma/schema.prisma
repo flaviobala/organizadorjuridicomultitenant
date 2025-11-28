@@ -21,7 +21,8 @@ enum UserRole {
 enum PlanType {
   free
   basic
-  pro
+  advanced
+  complete
 }
 
 enum SubscriptionStatus {

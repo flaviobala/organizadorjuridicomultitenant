@@ -12,7 +12,7 @@ export default function FAQSection() {
     },
     {
       question: 'Quanto tempo leva para organizar um processo completo?',
-      answer: 'Em média, 3-5 minutos para um processo com 50-100 páginas. Você faz upload de todos os arquivos de uma vez, o sistema processa automaticamente e entrega tudo organizado, renomeado e pesquisável. O que antes levava horas agora leva minutos.',
+      answer: 'Em média, 5-10 minutos para um processo com 50-100 páginas. Você faz upload de todos os arquivos de uma vez, o sistema processa automaticamente e entrega tudo organizado, renomeado e pesquisável. O que antes levava horas agora leva minutos.',
     },
     {
       question: 'Meus dados estão seguros? E o sigilo profissional?',
@@ -38,13 +38,13 @@ export default function FAQSection() {
       question: 'Posso cancelar se não gostar?',
       answer: 'Sim! Oferecemos garantia de 30 dias. Se não ficar satisfeito, devolvemos 100% do valor pago, sem perguntas e sem burocracia. Nosso objetivo é que você economize tempo, não que fique preso a algo que não funciona para você.',
     },
-    {
-      question: 'Tem limite de armazenamento ou de documentos?',
-      answer: 'Não há limite de documentos. O armazenamento é dimensionado conforme o uso do escritório. Para escritórios pequenos/médios, dificilmente haverá problema. Para grandes volumes, conversamos sobre a melhor configuração na proposta personalizada.',
-    },
+    // {
+    //   question: 'Tem limite de armazenamento ou de documentos?',
+    //   answer: 'Não há limite de documentos. O armazenamento é dimensionado conforme o uso do escritório. Para escritórios pequenos/médios, dificilmente haverá problema. Para grandes volumes, conversamos sobre a melhor configuração na proposta personalizada.',
+    // },
     {
       question: 'Como é o pagamento? Aceita parcelamento?',
-      answer: 'Pagamento único anual via boleto, PIX ou cartão de crédito. Emitimos nota fiscal. Para pagamento no cartão, é possível parcelar conforme bandeira e limite. Entre em contato para mais detalhes.',
+      answer: 'Pagamento único anual, PIX ou cartão de crédito. Emitimos nota fiscal. Para pagamento no cartão, é possível parcelar conforme bandeira e limite. Entre em contato para mais detalhes.',
     },
   ]
 

@@ -3,26 +3,35 @@ import { prisma } from './prisma'
 
 /**
  * Limites por tipo de plano
+ * NOTA: Limites por DOCUMENTOS (não mais por tokens de IA)
  */
 export const PLAN_LIMITS = {
   free: {
-    maxDocuments: 50,
-    maxTokens: 100000,
-    maxUsers: 2,
+    maxDocuments: 15, // Teste grátis: 3 dias OU 50 documentos
+    maxUsers: 1,
     trialDays: 3, // 3 dias de teste
-    features: ['basic_processing', 'ai_categorization']
+    hasValidation: false, // Sem validação de pertinência
+    features: ['basic_processing', 'ai_categorization', 'ocr']
   },
   basic: {
-    maxDocuments: 500,
-    maxTokens: 1000000,
-    maxUsers: 5,
-    features: ['basic_processing', 'ai_categorization', 'batch_upload']
+    maxDocuments: 300, // 300 documentos por mês
+    maxUsers: 1,
+    hasValidation: false, // Sem validação de pertinência
+    features: ['basic_processing', 'ai_categorization', 'batch_upload', 'ocr']
   },
-  pro: {
-    maxDocuments: 5000,
-    maxTokens: 10000000,
-    maxUsers: 20,
-    features: ['basic_processing', 'ai_categorization', 'batch_upload', 'advanced_ai', 'priority_support']
+  advanced: {
+    maxDocuments: 600, // 600 documentos por mês
+    maxUsers: 3,
+    hasValidation: true, // Validação de pertinência (300 docs/mês)
+    maxValidations: 300,
+    features: ['basic_processing', 'ai_categorization', 'batch_upload', 'ocr', 'ai_validation', 'usage_panel', 'priority_support']
+  },
+  complete: {
+    maxDocuments: 1200, // 1.200 documentos por mês
+    maxUsers: 5,
+    hasValidation: true, // Validação de pertinência ilimitada
+    maxValidations: -1, // Ilimitado
+    features: ['basic_processing', 'ai_categorization', 'batch_upload', 'ocr', 'ai_validation', 'usage_panel', 'complete_support']
   }
 } as const
 
@@ -31,12 +40,10 @@ export interface PlanCheckResult {
   reason?: string
   usage?: {
     documents: number
-    tokens: number
     users: number
   }
   limits?: {
     documents: number
-    tokens: number
     users: number
   }
 }
@@ -66,13 +73,23 @@ export async function checkPlanLimits(organizationId: number): Promise<PlanCheck
       }
     }
 
-    // Verificar se o período FREE expirou
-    if (organization.planType === 'free' && organization.freeTrialEndsAt) {
+    // Verificar se o período FREE expirou (3 dias OU 50 documentos - o que vier primeiro)
+    if (organization.planType === 'free') {
       const now = new Date()
-      if (now > organization.freeTrialEndsAt) {
+
+      // Verificar se os 3 dias expiraram
+      if (organization.freeTrialEndsAt && now > organization.freeTrialEndsAt) {
         return {
           allowed: false,
           reason: 'Seu período de teste de 3 dias expirou. Faça upgrade para continuar usando o sistema.'
+        }
+      }
+
+      // Verificar se atingiu 50 documentos
+      if (organization.documentProcessedCount >= 50) {
+        return {
+          allowed: false,
+          reason: 'Você atingiu o limite de 50 documentos do teste grátis. Faça upgrade para continuar usando o sistema.'
         }
       }
     }
@@ -105,33 +122,13 @@ export async function checkPlanLimits(organizationId: number): Promise<PlanCheck
     if (limits.maxDocuments !== -1 && organization.documentProcessedCount >= limits.maxDocuments) {
       return {
         allowed: false,
-        reason: `Limite de documentos atingido (${limits.maxDocuments}). Faça upgrade do seu plano.`,
+        reason: `Limite de ${limits.maxDocuments} documentos atingido neste mês. Faça upgrade do seu plano ou aguarde a renovação.`,
         usage: {
           documents: organization.documentProcessedCount,
-          tokens: organization.aiTokenCount,
           users: organization._count.users
         },
         limits: {
           documents: limits.maxDocuments,
-          tokens: limits.maxTokens,
-          users: limits.maxUsers
-        }
-      }
-    }
-
-    // Verificar limite de tokens (-1 = ilimitado)
-    if (limits.maxTokens !== -1 && organization.aiTokenCount >= limits.maxTokens) {
-      return {
-        allowed: false,
-        reason: `Limite de tokens IA atingido (${limits.maxTokens.toLocaleString()}). Faça upgrade do seu plano.`,
-        usage: {
-          documents: organization.documentProcessedCount,
-          tokens: organization.aiTokenCount,
-          users: organization._count.users
-        },
-        limits: {
-          documents: limits.maxDocuments,
-          tokens: limits.maxTokens,
           users: limits.maxUsers
         }
       }
@@ -142,12 +139,10 @@ export async function checkPlanLimits(organizationId: number): Promise<PlanCheck
       allowed: true,
       usage: {
         documents: organization.documentProcessedCount,
-        tokens: organization.aiTokenCount,
         users: organization._count.users
       },
       limits: {
         documents: limits.maxDocuments,
-        tokens: limits.maxTokens,
         users: limits.maxUsers
       }
     }
@@ -210,6 +205,7 @@ export async function incrementDocumentCount(organizationId: number): Promise<vo
 
 /**
  * Incrementa contador de tokens IA
+ * NOTA: Mantido para compatibilidade, mas não mais usado para limites
  */
 export async function incrementTokenCount(organizationId: number, tokens: number): Promise<void> {
   try {

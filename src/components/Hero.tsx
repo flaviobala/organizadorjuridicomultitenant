@@ -6,14 +6,14 @@ export default function Hero() {
       <div className="max-w-7xl mx-auto px-6 lg:px-8">
         <div className="text-center">
           {/* Logo */}
-          <div className="mb-12 flex justify-center">
+          {/* <div className="mb-12 flex justify-center">
             <img
               src="/logo-white.png"
               alt="ADV DocMaster"
               className="h-16"
               style={{ background: 'transparent' }}
             />
-          </div>
+          </div> */}
 
           {/* Título Principal */}
           <h1 className="text-5xl font-extrabold tracking-tight text-white sm:text-6xl lg:text-7xl max-w-4xl mx-auto">

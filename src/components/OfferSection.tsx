@@ -17,7 +17,7 @@ export default function OfferSection() {
           {/* Conteúdo Principal */}
           <div className="text-center text-white mb-12">
             <h2 className="text-4xl sm:text-5xl font-bold mb-6">
-              Teste Grátis por 3 Dias ou até 50 Documentos
+              Teste Grátis por 3 Dias ou até 15 Documentos
             </h2>
             <p className="text-xl text-indigo-100 mb-4">
               Tempo suficiente para ver, na prática, como a plataforma transforma sua rotina jurídica.
