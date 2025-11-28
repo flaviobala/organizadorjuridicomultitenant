@@ -16,8 +16,9 @@ const preApprovalClient = new PreApproval(client)
 
 // Definir preços dos planos (em reais) - VALORES DE TESTE
 const PLAN_PRICES = {
-  basic: 15.00,
-  pro: 25.00
+  basic: 34.90,
+  advanced: 69.90,
+  complete: 99.90
 }
 
 /**
@@ -30,7 +31,7 @@ export async function POST(request: NextRequest) {
     const { planType, email } = body
 
     // Validar plano
-    if (!['basic', 'pro'].includes(planType)) {
+    if (!['basic', 'advanced', 'complete'].includes(planType)) {
       return NextResponse.json({
         success: false,
         error: 'Plano inválido'

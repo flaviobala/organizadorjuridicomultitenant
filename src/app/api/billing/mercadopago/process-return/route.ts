@@ -61,8 +61,8 @@ export async function GET(request: NextRequest) {
     // Mapear nome do plano
     const planTypeMap: Record<string, string> = {
       'basic': 'basic',
-      'pro': 'pro',
-      'enterprise': 'enterprise'
+      'advanced': 'advanced',
+      'complete': 'complete'
     }
 
     const planType = planTypeMap[plan.toLowerCase()] || 'basic'

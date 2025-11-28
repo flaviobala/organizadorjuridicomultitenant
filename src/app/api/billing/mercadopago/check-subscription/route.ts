@@ -86,18 +86,19 @@ export async function POST(request: NextRequest) {
     let planType = 'basic' // padrão
     let planName = 'Basic'
 
-    // Mapear baseado nos preços: Basic=R$5, Pro=R$3, Enterprise=R$199.90
-    if (amount >= 199) {
-      planType = 'enterprise'
-      planName = 'Enterprise'
-    } else if (amount >= 4.5) {
-      // R$ 5.00 = Basic
+    // Mapear baseado nos preços: Basic=R$34.90, Advanced=R$69.90, Complete=R$99.90
+    if (amount >= 90) {
+      // R$ 99.90 = Complete
+      planType = 'complete'
+      planName = 'Complete'
+    } else if (amount >= 60) {
+      // R$ 69.90 = Advanced
+      planType = 'advanced'
+      planName = 'Advanced'
+    } else if (amount >= 30) {
+      // R$ 34.90 = Basic
       planType = 'basic'
       planName = 'Basic'
-    } else if (amount >= 2.5) {
-      // R$ 3.00 = Pro
-      planType = 'pro'
-      planName = 'Pro'
     } else {
       planType = 'basic'
       planName = 'Basic'

@@ -17,7 +17,7 @@ Criamos uma página de confirmação manual que você deve acessar após conclui
 1. Faça login no sistema com o usuário de teste
 2. Acesse a página de planos: `/pricing`
 3. Leia o banner azul com as instruções
-4. Clique em "Assinar agora" no plano desejado (Basic ou Pro)
+4. Clique em "Assinar agora" no plano desejado (Basic, Advanced ou Complete)
 5. Você será redirecionado para o checkout do MercadoPago
 
 ### 2. Completar Pagamento no MercadoPago
@@ -105,7 +105,7 @@ https://SEU_DOMINIO.ngrok-free.app/confirmar-pagamento
 ```
 POST /api/billing/mercadopago/create-subscription
 Authorization: Bearer TOKEN
-Body: { "planType": "basic" | "pro" | "enterprise" }
+Body: { "planType": "basic" | "advanced" | "complete" }
 ```
 
 ### Processar Retorno
@@ -148,7 +148,7 @@ WHERE id = YOUR_ORG_ID;
 ```
 
 Deve mostrar:
-- `planType`: "basic", "pro" ou "enterprise"
+- `planType`: "free", "basic", "advanced" ou "complete"
 - `subscriptionStatus`: "active"
 - `mercadoPagoSubscriptionId`: ID da assinatura do MP
 
@@ -158,25 +158,29 @@ Deve mostrar:
 
 Configurados em `src/lib/plan-limits.ts`:
 
-### Trial
-- 50 documentos
-- 100.000 tokens
-- 2 usuários
+### Free (Teste Grátis)
+- 15 documentos
+- Duração: 3 dias
+- 1 usuário
+- Sem validação de pertinência
 
-### Basic (R$ 1)
-- 500 documentos
-- 1.000.000 tokens
+### Basic (R$ 34,90/mês)
+- 300 documentos por mês
+- Tokens IA ilimitados
+- 1 usuário
+- Sem validação de pertinência
+
+### Advanced (R$ 69,90/mês)
+- 600 documentos por mês
+- Tokens IA ilimitados
+- 3 usuários
+- Validação de pertinência (300 docs/mês)
+
+### Complete (R$ 99,90/mês)
+- 1.200 documentos por mês
+- Tokens IA ilimitados
 - 5 usuários
-
-### Pro (R$ 2)
-- 5.000 documentos
-- 10.000.000 tokens
-- 20 usuários
-
-### Enterprise (R$ 3)
-- Documentos ilimitados (-1)
-- Tokens ilimitados (-1)
-- Usuários ilimitados (-1)
+- Validação de pertinência ilimitada
 
 ---
 
@@ -184,13 +188,10 @@ Configurados em `src/lib/plan-limits.ts`:
 
 ### Para Produção
 
-1. Substituir valores de teste por reais em `/pricing/page.tsx`:
-   ```typescript
-   // MUDAR DE:
-   price: 'R$ 1', period: '/mês (TESTE)'
-   // PARA:
-   price: 'R$ 49,90', period: '/mês'
-   ```
+1. Os valores já estão configurados corretamente em `/components/PricingSection.tsx`:
+   - Basic: R$ 34,90/mês
+   - Advanced: R$ 69,90/mês
+   - Complete: R$ 99,90/mês
 
 2. Usar credenciais de produção no `.env.local`:
    ```env
