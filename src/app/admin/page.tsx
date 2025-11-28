@@ -111,10 +111,10 @@ export default function AdminDashboard() {
 
   const getPlanBadgeColor = (plan: string) => {
     const colors: Record<string, string> = {
+      free: 'bg-yellow-100 text-yellow-800',
       basic: 'bg-gray-100 text-gray-800',
-      pro: 'bg-blue-100 text-blue-800',
-      enterprise: 'bg-purple-100 text-purple-800',
-      trialing: 'bg-yellow-100 text-yellow-800',
+      advanced: 'bg-blue-100 text-blue-800',
+      complete: 'bg-purple-100 text-purple-800',
     }
     return colors[plan] || 'bg-gray-100 text-gray-800'
   }
@@ -359,10 +359,10 @@ export default function AdminDashboard() {
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
                 >
                   <option value="all">Todos os Planos</option>
-                  <option value="trialing">Trialing</option>
+                  <option value="free">Free</option>
                   <option value="basic">Basic</option>
-                  <option value="pro">Pro</option>
-                  <option value="enterprise">Enterprise</option>
+                  <option value="advanced">Advanced</option>
+                  <option value="complete">Complete</option>
                 </select>
               </div>
 
@@ -377,7 +377,6 @@ export default function AdminDashboard() {
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
                 >
                   <option value="all">Todos os Status</option>
-                  <option value="trialing">Trialing</option>
                   <option value="active">Active</option>
                   <option value="past_due">Past Due</option>
                   <option value="canceled">Canceled</option>
@@ -419,9 +418,9 @@ export default function AdminDashboard() {
             </div>
           </div>
           <div className="bg-gradient-to-br from-amber-500 to-orange-600 rounded-xl shadow-lg p-6 text-white transform hover:scale-105 transition-transform">
-            <div className="text-sm text-amber-100 mb-1 font-medium">🆓 Em Trial</div>
+            <div className="text-sm text-amber-100 mb-1 font-medium">🆓 Plano Free</div>
             <div className="text-4xl font-bold">
-              {organizations.filter(o => o.subscriptionStatus === 'trialing').length}
+              {organizations.filter(o => o.planType === 'free').length}
             </div>
           </div>
           <div className="bg-gradient-to-br from-red-500 to-rose-600 rounded-xl shadow-lg p-6 text-white transform hover:scale-105 transition-transform">

@@ -296,10 +296,10 @@ export default function NewOrganizationPage() {
                 onChange={handleChange}
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               >
-                <option value="free">Free (50 docs, 100K tokens)</option>
-                <option value="basic">Basic (500 docs, 1M tokens)</option>
-                <option value="pro">Pro (5K docs, 10M tokens)</option>
-                <option value="enterprise">Enterprise (Ilimitado)</option>
+                <option value="free">Free - Teste Grátis (15 docs, 3 dias)</option>
+                <option value="basic">Basic (300 docs/mês, 1 usuário)</option>
+                <option value="advanced">Advanced (600 docs/mês, 3 usuários, validação)</option>
+                <option value="complete">Complete (1200 docs/mês, 5 usuários, validação ilimitada)</option>
               </select>
             </div>
 

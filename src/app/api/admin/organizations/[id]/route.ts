@@ -36,7 +36,7 @@ export async function PATCH(
     console.log('📝 Dados recebidos:', { orgId, name, planType, contactName, contactPhone, cnpj })
 
     // Validar plano
-    const validPlans = ['trialing', 'basic', 'pro', 'enterprise']
+    const validPlans = ['free', 'basic', 'advanced', 'complete']
     if (planType && !validPlans.includes(planType)) {
       return NextResponse.json({ error: 'Plano inválido' }, { status: 400 })
     }
