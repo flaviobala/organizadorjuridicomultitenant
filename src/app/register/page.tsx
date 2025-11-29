@@ -88,27 +88,7 @@ function RegisterForm() {
 
     setLoading(true)
     try {
-      // PASSO 1: Criar assinatura no MercadoPago PRIMEIRO (antes de criar conta)
-      const subscriptionResponse = await fetch('/api/billing/mercadopago/create-subscription', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          planType: selectedPlan,
-          email: formData.email
-        })
-      })
-
-      const subscriptionData = await subscriptionResponse.json()
-
-      if (!subscriptionResponse.ok || !subscriptionData.success) {
-        setError(subscriptionData.error || 'Erro ao criar assinatura no MercadoPago')
-        setLoading(false)
-        return
-      }
-
-      // PASSO 2: Só criar conta se a assinatura foi criada com sucesso
+      // PASSO 1: Criar conta do usuário PRIMEIRO
       const response = await fetch('/api/auth/register', {
         method: 'POST',
         headers: {
@@ -117,8 +97,7 @@ function RegisterForm() {
         body: JSON.stringify({
           name: formData.name,
           email: formData.email,
-          password: formData.password,
-          mercadoPagoSubscriptionId: subscriptionData.subscriptionId // Salvar ID da assinatura
+          password: formData.password
         })
       })
 
@@ -130,12 +109,36 @@ function RegisterForm() {
         return
       }
 
-      // Salvar token no localStorage
-      if (data.token) {
-        localStorage.setItem('token', data.token)
+      // PASSO 2: Salvar token no localStorage (auto-login)
+      if (!data.token) {
+        setError('Erro: Token de autenticação não recebido')
+        setLoading(false)
+        return
       }
 
-      // PASSO 3: Redirecionar para checkout do MercadoPago
+      localStorage.setItem('token', data.token)
+
+      // PASSO 3: Criar assinatura no Asaas usando o token
+      const subscriptionResponse = await fetch('/api/billing/asaas/create-subscription', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${data.token}`
+        },
+        body: JSON.stringify({
+          planType: selectedPlan
+        })
+      })
+
+      const subscriptionData = await subscriptionResponse.json()
+
+      if (!subscriptionResponse.ok || !subscriptionData.success) {
+        setError(subscriptionData.error || 'Erro ao criar assinatura')
+        setLoading(false)
+        return
+      }
+
+      // PASSO 4: Redirecionar para checkout do Asaas
       if (subscriptionData.checkoutUrl) {
         window.location.href = subscriptionData.checkoutUrl
       } else {
@@ -204,8 +207,8 @@ function RegisterForm() {
               </svg>
               <div className="text-sm text-blue-800">
                 <strong>Como funciona?</strong>
-                <p className="mt-1">Após criar sua conta, você será redirecionado para o checkout do MercadoPago para completar o pagamento.
-                Você poderá pagar com cartão de crédito e PIX.</p>
+                <p className="mt-1">Após criar sua conta, você será redirecionado automaticamente para o checkout seguro do Asaas para completar o pagamento.
+                Você poderá pagar com cartão de crédito ou PIX.</p>
               </div>
             </div>
           </div>
