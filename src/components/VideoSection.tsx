@@ -20,8 +20,7 @@ export default function VideoSection() {
                 controls
                 preload="metadata"
               >
-                <source src="/videoIntrodutorio.MOV" type="video/quicktime" />
-                <source src="/videoIntrodutorio.MOV" type="video/mp4" />
+                <source src="/videoIntrodutorio.mp4" type="video/mp4" />
                 Seu navegador não suporta o elemento de vídeo.
               </video>
             </div>
