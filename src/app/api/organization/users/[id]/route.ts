@@ -84,9 +84,39 @@ export async function DELETE(
       }
     }
 
-    // Excluir o usuário
-    await prisma.user.delete({
-      where: { id: userId }
+    // Excluir o usuário e todos os seus dados relacionados em cascata
+    // Usar transação para garantir que tudo seja excluído ou nada seja excluído
+    await prisma.$transaction(async (tx) => {
+      // 1. Buscar todos os projetos do usuário
+      const userProjects = await tx.project.findMany({
+        where: { userId: userId },
+        select: { id: true }
+      })
+
+      const projectIds = userProjects.map(p => p.id)
+
+      console.log(`🗑️ Excluindo ${projectIds.length} projetos do usuário...`)
+
+      if (projectIds.length > 0) {
+        // 2. Excluir todos os documentos dos projetos do usuário
+        const deletedDocs = await tx.document.deleteMany({
+          where: { projectId: { in: projectIds } }
+        })
+
+        console.log(`🗑️ ${deletedDocs.count} documentos excluídos`)
+
+        // 3. Excluir todos os projetos do usuário
+        const deletedProjects = await tx.project.deleteMany({
+          where: { userId: userId }
+        })
+
+        console.log(`🗑️ ${deletedProjects.count} projetos excluídos`)
+      }
+
+      // 4. Finalmente, excluir o usuário
+      await tx.user.delete({
+        where: { id: userId }
+      })
     })
 
     console.log(`✅ Usuário excluído: ${userToDelete.email} (ID: ${userId}) da organização ${userToDelete.organization.name}`)

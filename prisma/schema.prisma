@@ -41,6 +41,8 @@ model Organization {
   aiTokenCount               Int                @default(0) @map("ai_token_count")
   stripeCustomerId           String?            @unique @map("stripe_customer_id")
   mercadoPagoSubscriptionId  String?            @unique @map("mercadopago_subscription_id")
+  asaasCustomerId            String?            @unique @map("asaas_customer_id")
+  asaasSubscriptionId        String?            @unique @map("asaas_subscription_id")
   subscriptionDueDate        DateTime?          @map("subscription_due_date")
   freeTrialEndsAt            DateTime?          @map("free_trial_ends_at")
 

@@ -1,7 +1,13 @@
+'use client'
+
 import { FaCheck } from 'react-icons/fa'
 import Link from 'next/link'
+import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 
 export default function PricingSection() {
+  const router = useRouter()
+  const [loading, setLoading] = useState<string | null>(null)
   const plans = [
     {
       id: 'basic',
@@ -69,6 +75,47 @@ export default function PricingSection() {
     }
   ]
 
+  const handleSubscribe = async (planId: string) => {
+    // Se não estiver logado, vai para registro
+    const token = localStorage.getItem('token')
+    if (!token) {
+      router.push(`/register?plan=${planId}`)
+      return
+    }
+
+    setLoading(planId)
+
+    try {
+      // Criar assinatura no Asaas
+      const response = await fetch('/api/billing/asaas/create-subscription', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ planType: planId })
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Erro ao criar assinatura')
+      }
+
+      // Redirecionar para checkout do Asaas
+      if (data.checkoutUrl) {
+        window.location.href = data.checkoutUrl
+      } else {
+        throw new Error('URL de checkout não recebida')
+      }
+
+    } catch (error) {
+      console.error('Erro ao criar assinatura:', error)
+      alert(error instanceof Error ? error.message : 'Erro ao criar assinatura')
+      setLoading(null)
+    }
+  }
+
   return (
     <section id="pricing" className="py-24 sm:py-32 bg-white">
       <div className="max-w-7xl mx-auto px-6 lg:px-8">
@@ -114,18 +161,27 @@ export default function PricingSection() {
                   ))}
                 </ul>
 
-                <Link
-                  href={plan.id === 'free' ? '/register' : `/register?plan=${plan.id}`}
-                  className={`w-full py-3 px-6 rounded-lg font-semibold transition-colors text-center block ${
+                <button
+                  onClick={() => handleSubscribe(plan.id)}
+                  disabled={loading === plan.id}
+                  className={`w-full py-3 px-6 rounded-lg font-semibold transition-colors text-center ${
                     plan.highlighted
-                      ? 'bg-blue-600 text-white hover:bg-blue-700'
-                      : plan.id === 'free'
-                        ? 'bg-green-600 text-white hover:bg-green-700'
-                        : 'bg-gray-100 text-gray-900 hover:bg-gray-200'
+                      ? 'bg-blue-600 text-white hover:bg-blue-700 disabled:bg-blue-400'
+                      : 'bg-gray-900 text-white hover:bg-gray-800 disabled:bg-gray-400'
                   }`}
                 >
-                  {plan.id === 'free' ? 'Começar grátis' : 'Assinar agora'}
-                </Link>
+                  {loading === plan.id ? (
+                    <span className="flex items-center justify-center">
+                      <svg className="animate-spin -ml-1 mr-2 h-5 w-5 text-white" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                      Processando...
+                    </span>
+                  ) : (
+                    'Assinar agora'
+                  )}
+                </button>
               </div>
             </div>
           ))}
