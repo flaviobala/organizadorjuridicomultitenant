@@ -2,6 +2,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireAuth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import axios from 'axios'
 
 /**
  * POST /api/billing/asaas/create-customer
@@ -56,33 +57,25 @@ export async function POST(request: NextRequest) {
       throw new Error('ASAAS_API_KEY não configurada')
     }
 
-    const asaasResponse = await fetch('https://www.asaas.com/api/v3/customers', {
-      method: 'POST',
+    const asaasResponse = await axios.post('https://www.asaas.com/api/v3/customers', {
+      name: organization.name,
+      email: adminUser.email,
+      phone: organization.contactPhone?.replace(/\D/g, '') || undefined,
+      cpfCnpj: organization.cnpj?.replace(/\D/g, '') || undefined,
+      postalCode: organization.zipCode?.replace(/\D/g, '') || undefined,
+      address: organization.address || undefined,
+      addressNumber: undefined, // Extrair do address se necessário
+      province: organization.city || undefined,
+      externalReference: organization.id.toString(),
+      notificationDisabled: false
+    }, {
       headers: {
         'access_token': apiKey,
         'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        name: organization.name,
-        email: adminUser.email,
-        phone: organization.contactPhone?.replace(/\D/g, '') || undefined,
-        cpfCnpj: organization.cnpj?.replace(/\D/g, '') || undefined,
-        postalCode: organization.zipCode?.replace(/\D/g, '') || undefined,
-        address: organization.address || undefined,
-        addressNumber: undefined, // Extrair do address se necessário
-        province: organization.city || undefined,
-        externalReference: organization.id.toString(),
-        notificationDisabled: false
-      })
+      }
     })
 
-    if (!asaasResponse.ok) {
-      const errorData = await asaasResponse.json()
-      console.error('❌ [ASAAS] Erro ao criar cliente:', errorData)
-      throw new Error(errorData.errors?.[0]?.description || 'Erro ao criar cliente')
-    }
-
-    const customerData = await asaasResponse.json()
+    const customerData = asaasResponse.data
     console.log('✅ [ASAAS] Cliente criado:', customerData.id)
 
     // Salvar ID do cliente no banco

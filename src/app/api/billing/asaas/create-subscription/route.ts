@@ -2,6 +2,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireAuth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import axios from 'axios'
 
 // Definir preços dos planos (em reais)
 const PLAN_PRICES = {
@@ -81,34 +82,26 @@ export async function POST(request: NextRequest) {
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL || request.nextUrl.origin
 
     // Criar assinatura no Asaas
-    const asaasResponse = await fetch('https://www.asaas.com/api/v3/subscriptions', {
-      method: 'POST',
+    const asaasResponse = await axios.post('https://www.asaas.com/api/v3/subscriptions', {
+      customer: organization.asaasCustomerId,
+      billingType: 'UNDEFINED', // Usuário escolhe no checkout
+      value: planPrice,
+      cycle: 'MONTHLY',
+      description: `Plano ${planType.charAt(0).toUpperCase() + planType.slice(1)} - AdvConecta`,
+      externalReference: `${organization.id}-${planType}`,
+      // URLs de retorno
+      callback: {
+        successUrl: `${baseUrl}/payment-success?plan=${planType}`,
+        autoRedirect: true
+      }
+    }, {
       headers: {
         'access_token': apiKey,
         'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        customer: organization.asaasCustomerId,
-        billingType: 'UNDEFINED', // Usuário escolhe no checkout
-        value: planPrice,
-        cycle: 'MONTHLY',
-        description: `Plano ${planType.charAt(0).toUpperCase() + planType.slice(1)} - AdvConecta`,
-        externalReference: `${organization.id}-${planType}`,
-        // URLs de retorno
-        callback: {
-          successUrl: `${baseUrl}/payment-success?plan=${planType}`,
-          autoRedirect: true
-        }
-      })
+      }
     })
 
-    if (!asaasResponse.ok) {
-      const errorData = await asaasResponse.json()
-      console.error('❌ [ASAAS] Erro ao criar assinatura:', errorData)
-      throw new Error(errorData.errors?.[0]?.description || 'Erro ao criar assinatura')
-    }
-
-    const subscriptionData = await asaasResponse.json()
+    const subscriptionData = asaasResponse.data
     console.log('✅ [ASAAS] Assinatura criada:', subscriptionData.id)
 
     // Salvar ID da assinatura no localStorage (frontend vai usar)
