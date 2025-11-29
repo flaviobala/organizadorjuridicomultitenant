@@ -2,13 +2,33 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireAuth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
-import axios from 'axios'
+import https from 'https'
 
 // Definir preços dos planos (em reais)
 const PLAN_PRICES = {
   basic: 34.90,
   advanced: 69.90,
   complete: 99.90
+}
+
+// Helper para fazer requisições HTTPS
+function httpsRequest(url: string, options: any, postData?: any): Promise<any> {
+  return new Promise((resolve, reject) => {
+    const req = https.request(url, options, (res) => {
+      let data = ''
+      res.on('data', (chunk) => data += chunk)
+      res.on('end', () => {
+        try {
+          resolve(JSON.parse(data))
+        } catch (e) {
+          resolve(data)
+        }
+      })
+    })
+    req.on('error', reject)
+    if (postData) req.write(JSON.stringify(postData))
+    req.end()
+  })
 }
 
 /**
@@ -81,8 +101,8 @@ export async function POST(request: NextRequest) {
 
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL || request.nextUrl.origin
 
-    // Criar assinatura no Asaas
-    const asaasResponse = await axios.post('https://www.asaas.com/api/v3/subscriptions', {
+    // Criar assinatura no Asaas usando HTTPS nativo
+    const payload = {
       customer: organization.asaasCustomerId,
       billingType: 'UNDEFINED', // Usuário escolhe no checkout
       value: planPrice,
@@ -94,14 +114,20 @@ export async function POST(request: NextRequest) {
         successUrl: `${baseUrl}/payment-success?plan=${planType}`,
         autoRedirect: true
       }
-    }, {
+    }
+
+    const subscriptionData = await httpsRequest('https://www.asaas.com/api/v3/subscriptions', {
+      method: 'POST',
       headers: {
         'access_token': apiKey,
         'Content-Type': 'application/json'
       }
-    })
+    }, payload)
 
-    const subscriptionData = asaasResponse.data
+    if (subscriptionData.errors) {
+      throw new Error(subscriptionData.errors[0]?.description || 'Erro ao criar assinatura')
+    }
+
     console.log('✅ [ASAAS] Assinatura criada:', subscriptionData.id)
 
     // Salvar ID da assinatura no localStorage (frontend vai usar)
