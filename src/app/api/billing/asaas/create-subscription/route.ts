@@ -116,7 +116,7 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    const subscriptionData = await httpsRequest('https://www.asaas.com/api/v3/subscriptions', {
+    const subscriptionData = await httpsRequest('https://sandbox.asaas.com/v3/subscriptions', {
       method: 'POST',
       headers: {
         'access_token': apiKey,

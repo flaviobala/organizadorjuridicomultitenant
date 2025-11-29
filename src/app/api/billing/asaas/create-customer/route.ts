@@ -57,7 +57,7 @@ export async function POST(request: NextRequest) {
       throw new Error('ASAAS_API_KEY não configurada')
     }
 
-    const asaasResponse = await axios.post('https://www.asaas.com/api/v3/customers', {
+    const asaasResponse = await axios.post('https://sandbox.asaas.com/v3/customers', {
       name: organization.name,
       email: adminUser.email,
       phone: organization.contactPhone?.replace(/\D/g, '') || undefined,

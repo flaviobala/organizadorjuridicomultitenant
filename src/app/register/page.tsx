@@ -7,7 +7,7 @@ import Link from 'next/link'
 function RegisterForm() {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const selectedPlan = searchParams.get('plan') || 'basic'
+  const selectedPlan = searchParams.get('plan') || 'free'
 
   const [formData, setFormData] = useState({
     name: '',
@@ -20,6 +20,20 @@ function RegisterForm() {
 
   // Informações dos planos
   const PLAN_INFO = {
+    free: {
+      name: 'GRATUITO',
+      price: 'Grátis',
+      description: 'Plano Gratuito - Experimente gratuitamente',
+      features: [
+        '15 documentos por mês',
+        'Narrativas ilimitadas',
+        'Agrupamento automático',
+        'OCR otimizado',
+        '1 usuário',
+        'Suporte via email'
+      ],
+      requiresCard: false
+    },
     basic: {
       name: 'BÁSICO',
       price: 'R$ 34,90/mês',
@@ -88,7 +102,7 @@ function RegisterForm() {
 
     setLoading(true)
     try {
-      // PASSO 1: Criar conta do usuário PRIMEIRO
+      // PASSO 1: SEMPRE criar conta no plano FREE (5 dias de teste grátis)
       const response = await fetch('/api/auth/register', {
         method: 'POST',
         headers: {
@@ -118,32 +132,43 @@ function RegisterForm() {
 
       localStorage.setItem('token', data.token)
 
-      // PASSO 3: Criar assinatura no Asaas usando o token
-      const subscriptionResponse = await fetch('/api/billing/asaas/create-subscription', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${data.token}`
-        },
-        body: JSON.stringify({
-          planType: selectedPlan
-        })
-      })
-
-      const subscriptionData = await subscriptionResponse.json()
-
-      if (!subscriptionResponse.ok || !subscriptionData.success) {
-        setError(subscriptionData.error || 'Erro ao criar assinatura')
-        setLoading(false)
+      // PASSO 3: SE o usuário escolheu plano FREE, ir direto para dashboard
+      if (selectedPlan === 'free') {
+        router.push('/dashboard')
         return
       }
 
-      // PASSO 4: Redirecionar para checkout do Asaas
-      if (subscriptionData.checkoutUrl) {
-        window.location.href = subscriptionData.checkoutUrl
-      } else {
-        setError('Erro: URL de checkout não encontrada')
-        setLoading(false)
+      // PASSO 4: SE plano PAGO, tentar criar subscription no Asaas
+      try {
+        const subscriptionResponse = await fetch('/api/billing/asaas/create-subscription', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${data.token}`
+          },
+          body: JSON.stringify({
+            planType: selectedPlan
+          })
+        })
+
+        const subscriptionData = await subscriptionResponse.json()
+
+        // SE criou subscription com sucesso, redirecionar para checkout
+        if (subscriptionResponse.ok && subscriptionData.success && subscriptionData.checkoutUrl) {
+          window.location.href = subscriptionData.checkoutUrl
+          return
+        }
+
+        // SE falhou, avisar mas NÃO bloquear - usuário fica no plano FREE
+        console.warn('Erro ao criar subscription:', subscriptionData.error)
+        alert('Sua conta foi criada no plano FREE! Você pode fazer upgrade depois no painel de configurações.')
+        router.push('/dashboard')
+
+      } catch (subscriptionError: any) {
+        // SE erro na subscription, avisar mas NÃO bloquear
+        console.error('Erro ao criar subscription:', subscriptionError)
+        alert('Sua conta foi criada no plano FREE! Você pode fazer upgrade depois no painel de configurações.')
+        router.push('/dashboard')
       }
 
     } catch (err: any) {
@@ -165,7 +190,7 @@ function RegisterForm() {
           {/* Header */}
           <div className="text-center">
             <h2 className="text-3xl font-bold text-gray-900">
-              Assinar Plano {currentPlan.name}
+              {selectedPlan === 'free' ? 'Criar Conta Gratuita' : `Assinar Plano ${currentPlan.name}`}
             </h2>
             <p className="mt-2 text-sm text-gray-600">
               {currentPlan.description}
@@ -200,18 +225,32 @@ function RegisterForm() {
           </div>
 
           {/* Payment Notice */}
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-            <div className="flex">
-              <svg className="w-5 h-5 text-blue-600 mr-2 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
-              </svg>
-              <div className="text-sm text-blue-800">
-                <strong>Como funciona?</strong>
-                <p className="mt-1">Após criar sua conta, você será redirecionado automaticamente para o checkout seguro do Asaas para completar o pagamento.
-                Você poderá pagar com cartão de crédito ou PIX.</p>
+          {selectedPlan !== 'free' ? (
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+              <div className="flex">
+                <svg className="w-5 h-5 text-blue-600 mr-2 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                </svg>
+                <div className="text-sm text-blue-800">
+                  <strong>Como funciona?</strong>
+                  <p className="mt-1">Após criar sua conta, você será redirecionado automaticamente para o checkout seguro do Asaas para completar o pagamento.
+                  Você poderá pagar com cartão de crédito ou PIX.</p>
+                </div>
               </div>
             </div>
-          </div>
+          ) : (
+            <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+              <div className="flex">
+                <svg className="w-5 h-5 text-green-600 mr-2 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                </svg>
+                <div className="text-sm text-green-800">
+                  <strong>Plano Gratuito</strong>
+                  <p className="mt-1">Crie sua conta gratuitamente e comece a usar agora mesmo! Você pode fazer upgrade para um plano pago a qualquer momento.</p>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Form */}
           <div className="bg-white rounded-lg shadow-xl p-8">
@@ -299,10 +338,10 @@ function RegisterForm() {
                       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                     </svg>
-                    Criando conta e assinatura...
+                    Criando conta...
                   </span>
                 ) : (
-                  'Ir para pagamento'
+                  selectedPlan === 'free' ? 'Criar conta gratuita' : 'Criar conta e ir para pagamento'
                 )}
               </button>
             </form>

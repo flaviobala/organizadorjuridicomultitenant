@@ -126,7 +126,7 @@ async function fetchPaymentDetails(paymentId: string): Promise<any> {
   try {
     const apiKey = process.env.ASAAS_API_KEY
 
-    const response = await fetch(`https://www.asaas.com/api/v3/payments/${paymentId}`, {
+    const response = await fetch(`https://sandbox.asaas.com/v3/payments/${paymentId}`, {
       headers: {
         'access_token': apiKey!
       }
@@ -152,7 +152,7 @@ async function fetchSubscriptionDetails(subscriptionId: string): Promise<any> {
   try {
     const apiKey = process.env.ASAAS_API_KEY
 
-    const response = await fetch(`https://www.asaas.com/api/v3/subscriptions/${subscriptionId}`, {
+    const response = await fetch(`https://sandbox.asaas.com/v3/subscriptions/${subscriptionId}`, {
       headers: {
         'access_token': apiKey!
       }
