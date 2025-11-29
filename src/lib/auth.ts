@@ -64,15 +64,20 @@ export async function registerUser(
   }
 ): Promise<AuthResult> {
   try {
-    // Verificar se o usuário já existe
-    const existingUser = await prisma.user.findUnique({
-      where: { email }
+    // Verificar se o usuário já é ADMIN de outra organização
+    // Um email só pode ser admin de UMA organização
+    // Mas um membro pode criar sua própria organização
+    const existingAdmin = await prisma.user.findFirst({
+      where: {
+        email,
+        role: 'admin'
+      }
     })
 
-    if (existingUser) {
+    if (existingAdmin) {
       return {
         success: false,
-        message: 'Email já cadastrado'
+        message: 'Este email já possui uma organização. Faça login para acessá-la.'
       }
     }
 
@@ -141,18 +146,26 @@ export async function registerUser(
 // Login do usuário
 export async function loginUser(email: string, password: string): Promise<AuthResult> {
   try {
-    // Buscar usuário com organização
-    const user = await prisma.user.findUnique({
+    // Buscar todos os usuários com este email
+    // Priorizar: 1) admin de organização, 2) primeiro membro encontrado
+    const users = await prisma.user.findMany({
       where: { email },
-      include: { organization: true }
+      include: { organization: true },
+      orderBy: [
+        { role: 'desc' }, // admin vem antes de member
+        { createdAt: 'desc' } // mais recente primeiro
+      ]
     })
 
-    if (!user) {
+    if (users.length === 0) {
       return {
         success: false,
         message: 'Email ou senha incorretos'
       }
     }
+
+    // Usar o primeiro resultado (admin se houver, senão membro mais recente)
+    const user = users[0]
 
     // Verificar senha
     const isPasswordValid = await verifyPassword(password, user.password)
